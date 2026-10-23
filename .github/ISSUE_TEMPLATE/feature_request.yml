@@ -1,0 +1,23 @@
+name: Feature proposal
+description: Propose a scoped product or contributor improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and intended user
+      description: Describe a concrete workflow and who benefits
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior and scope
+      description: Include alternatives, boundaries and what should remain unknown
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Security and operational considerations
+      description: New permissions, accounts, dependencies, storage, migration or cost; no secrets or customer evidence

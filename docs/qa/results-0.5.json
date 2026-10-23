@@ -1,0 +1,70 @@
+{
+  "release": "0.5.0",
+  "checked_local_date": "2026-10-24",
+  "synthetic_data_only": true,
+  "windows": {
+    "python": "3.10.11",
+    "passed": 347,
+    "skipped": 2,
+    "subtests_passed": 259
+  },
+  "linux": {
+    "python": "3.12",
+    "passed": 349,
+    "skipped": 0,
+    "subtests_passed": 259
+  },
+  "postgresql": "17.11",
+  "real_local_oidc": "Keycloak 26.8.1",
+  "real_customer_google_oidc_validated": false,
+  "real_cloud_provider_accounts_validated": false,
+  "independent_review_completed": false,
+  "public_customer_deployment_performed": false,
+  "images": {
+    "application": {
+      "image_id": "sha256:83ff48d8c948dbd1104ecaf0bad37de35ec9827b337b7350e68c9cd583f6469a",
+      "scanner": "0.76.1",
+      "created_at": "2026-10-23T19:08:28.880266465Z",
+      "known_vulnerabilities_all_severities": 0
+    },
+    "scanner": {
+      "image_id": "sha256:425e3a320c6054bef7a52d51dda9e5b1241f1c28a26b76541342fb8b4a34c455",
+      "scanner": "0.76.1",
+      "created_at": "2026-10-23T18:49:16.431578699Z",
+      "known_vulnerabilities_all_severities": 0
+    }
+  },
+  "recovery": {
+    "kind": "synthetic PostgreSQL logical restore drill",
+    "ready": true,
+    "elapsed_seconds": 81.38,
+    "quiesced_committed_data_lost": false,
+    "audit_anchor_matched": true,
+    "keys_and_document_digests_verified": true,
+    "restored_sessions_invalidated": true,
+    "interrupted_job_failed_without_snapshot": true,
+    "lease_expiry_accelerated_for_fixture": true,
+    "production_RPO_RTO_validated": false,
+    "PITR_WAL_archive_tested": false
+  },
+  "local_read_load": {
+    "requests": 100,
+    "concurrency": 8,
+    "tenant_count": 2,
+    "documents_per_tenant": 100,
+    "status_counts": {
+      "200": 100
+    },
+    "elapsed_seconds": 3.741,
+    "requests_per_second": 26.73,
+    "median_ms": 156.61,
+    "p95_ms": 811.71,
+    "maximum_ms": 1302.35,
+    "scope": "Local HTTP synthetic read workload; not TLS, provider population, sustained soak or production sizing."
+  },
+  "installed_wheel_verified": true,
+  "offline_standard_library_verification_passed": true,
+  "compose_profiles_validated": true,
+  "remote_ci_dispatched": false,
+  "identity_provider_under_consideration": "https://accounts.google.com"
+}

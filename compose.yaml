@@ -1,0 +1,99 @@
+name: cleartrail
+x-runtime: &runtime
+  build: .
+  image: cleartrail:0.5.0
+  env_file: ${CLEARTRAIL_ENV_FILE:-.env.hosted}
+  read_only: true
+  user: "10001:10001"
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs:
+    - /tmp:size=134217728,mode=1777,noexec,nosuid,nodev
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+services:
+  api:
+    <<: *runtime
+    networks: [default, scanner]
+    ports: ["127.0.0.1:8080:8080"]
+    cpus: 1.0
+    mem_limit: 512m
+    pids_limit: 128
+    stop_grace_period: 40s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request,urllib.parse; host=urllib.parse.urlsplit(os.environ['CLEARTRAIL_PUBLIC_URL']).netloc; r=urllib.request.Request('http://127.0.0.1:8080/readyz',headers={'Host':host}); urllib.request.urlopen(r,timeout=5).close()"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 20s
+  worker:
+    <<: *runtime
+    command: ["python", "-m", "cleartrail.hosted_worker"]
+    cpus: 1.0
+    mem_limit: 768m
+    pids_limit: 64
+    stop_grace_period: 700s
+  scheduler:
+    <<: *runtime
+    command: ["python", "-m", "cleartrail.hosted_scheduler"]
+    cpus: 0.5
+    mem_limit: 192m
+    pids_limit: 32
+    stop_grace_period: 30s
+  migrate:
+    <<: *runtime
+    profiles: ["maintenance"]
+    command: ["python", "-m", "cleartrail.hosted_admin", "migrate"]
+    restart: "no"
+  clamav:
+    profiles: [scanning]
+    build: {context: ., dockerfile: deploy/clamav.Dockerfile}
+    image: cleartrail-scanner:1.5.4-r1
+    entrypoint: [/usr/sbin/clamd]
+    command: [--config-file=/etc/clamav/clamd.conf]
+    user: "100:101"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [scanner]
+    volumes:
+      - scanner-definitions:/var/lib/clamav:ro
+      - ./deploy/clamd.conf:/etc/clamav/clamd.conf:ro
+    tmpfs: [/tmp:size=134217728,mode=1777,noexec,nosuid,nodev]
+    environment: {TZ: UTC}
+    mem_limit: 4g
+    cpus: 2
+    pids_limit: 128
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, /usr/bin/clamdscan, --config-file=/etc/clamav/clamd.conf, --ping=1]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+  signature-updater:
+    profiles: [scanning]
+    build: {context: ., dockerfile: deploy/clamav.Dockerfile}
+    image: cleartrail-scanner:1.5.4-r1
+    entrypoint: [/usr/bin/freshclam]
+    command: [--daemon, --config-file=/etc/clamav/freshclam.conf]
+    user: "100:101"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - scanner-definitions:/var/lib/clamav
+      - ./deploy/freshclam.conf:/etc/clamav/freshclam.conf:ro
+    tmpfs: [/tmp:size=134217728,mode=1777,noexec,nosuid,nodev]
+    environment: {TZ: UTC}
+    mem_limit: 3g
+    cpus: 1
+    pids_limit: 64
+    restart: unless-stopped
+networks:
+  scanner:
+    internal: true
+volumes:
+  scanner-definitions:

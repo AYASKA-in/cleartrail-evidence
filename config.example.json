@@ -1,0 +1,8 @@
+{
+  "organization": "Your organization",
+  "providers": {
+    "github": { "enabled": true, "org": "your-github-org" },
+    "google": { "enabled": false, "customer": "my_customer" },
+    "aws": { "enabled": false, "profile": "default", "region": "us-east-1", "expected_account_id": "123456789012" }
+  }
+}

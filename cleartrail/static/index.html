@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#123e32">
+  <title>ClearTrail · Evidence workspace</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a href="#main" class="skip">Skip to content</a>
+  <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7V5h6l3 3h9v12H3z"/><path d="M3 8h9"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="m9 15 6-6M14 6l2-2a4.2 4.2 0 0 1 6 6l-4 4a4.2 4.2 0 0 1-6 0M10 18l-2 2a4.2 4.2 0 0 1-6-6l4-4a4.2 4.2 0 0 1 6 0"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M5 3h9l5 5v13H5zM14 3v6h5M8 13h8M8 17h6"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 8a9 9 0 1 0 1 8M20 3v6h-6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="m12 3 10 18H2zM12 9v5m0 3v1"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-14-2 16"/></symbol>
+  </defs></svg>
+  <aside class="sidebar">
+    <a class="brand" href="#overview" aria-label="ClearTrail overview"><span class="brand-mark"><svg><use href="#i-shield"/></svg></span>cleartrail<span class="brand-dot">.</span></a>
+    <div class="workspace"><div class="avatar">N</div><div><strong id="workspace-name">Your workspace</strong><span>Evidence workspace</span></div></div>
+    <div class="nav-label">WORKSPACE</div>
+    <nav aria-label="Main navigation">
+      <a href="#overview" data-view="overview"><svg><use href="#i-grid"/></svg>Overview</a>
+      <a href="#controls" data-view="controls"><svg><use href="#i-shield"/></svg>Controls<span class="nav-count">14</span></a>
+      <a href="#evidence" data-view="evidence"><svg><use href="#i-folder"/></svg>Evidence library</a>
+      <a href="#documents" data-view="documents" id="documents-nav" hidden><svg><use href="#i-file"/></svg>Team documents</a>
+      <a href="#integrations" data-view="integrations"><svg><use href="#i-link"/></svg>Integrations</a>
+      <a href="#monitoring" data-view="monitoring" id="monitoring-nav" hidden><svg><use href="#i-clock"/></svg>Monitoring</a>
+      <a href="#reports" data-view="reports"><svg><use href="#i-file"/></svg>Reports</a>
+    </nav>
+    <div class="sidebar-bottom"><div class="local-card"><svg><use href="#i-lock"/></svg><strong>Your evidence. Your machine.</strong><p>Local storage. Read-only access.<br>Open source, always.</p></div><span class="version">CLEARTRAIL <span>v0.5.0 · MIT</span></span></div>
+  </aside>
+  <div class="app">
+    <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong id="page-name">Overview</strong></div><div class="top-meta"><span class="local-pill"><i></i>Local workspace</span><span class="profile" aria-label="Local user">CT</span></div></header>
+    <main id="main" tabindex="-1">
+      <div id="banner" class="notice" hidden></div>
+      <section class="page-heading"><div><div class="eyebrow">A LITTLE CLARITY GOES A LONG WAY</div><h1 id="heading">Your security, backed by evidence.</h1><p id="subtitle">One place to collect the proof, spot the gaps, and keep moving.</p></div><div class="heading-actions"><a class="button secondary" id="export" href="/api/export"><svg><use href="#i-download"/></svg>Export report</a><button id="collect" class="button primary"><svg><use href="#i-refresh"/></svg><span>Collect evidence</span></button></div></section>
+      <div class="collection-meta"><span id="snapshot-time">No collection yet</span><span class="scope-pill">SOC 2 <span>+</span> ISO 27001:2022 · starter checks</span></div>
+      <div id="health-status" class="health-status" role="status" hidden></div>
+      <div id="content" aria-live="polite"><div class="empty">Loading your workspace…</div></div>
+      <footer><span><svg><use href="#i-lock"/></svg>Evidence stays on this machine.</span><span>Point-in-time checks · Framework mappings are indicative.</span></footer>
+    </main>
+  </div>
+  <dialog id="detail" aria-labelledby="dialog-title"><div class="dialog-top"><span class="eyebrow" id="dialog-eyebrow">EVIDENCE DETAIL</span><button class="icon-button" id="close-dialog" aria-label="Close details"><svg><use href="#i-x"/></svg></button></div><div id="dialog-body"></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Keep source and shell/container configuration consistent across platforms.
+* text=auto eol=lf
+
+# These files carry fixed digests or preserve independently generated fixtures.
+cleartrail/data/catalogs/*.json -text
+tests/fixtures/* -text whitespace=cr-at-eol
+# Preserve the original SQLAlchemy-generated schema, including trailing spaces.
+tests/fixtures/hosted_schema_v1.sql -whitespace
+
+*.jpg -text
+*.jpeg -text
+*.png -text
+*.ico -text

@@ -1,0 +1,62 @@
+name: security-and-regression
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  regression:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.10', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install --require-hashes -r requirements-hosted.lock
+      - run: python -m pip install '.[dev]'
+      - run: python -m pytest -q
+      - run: python -m ruff check cleartrail scripts tests --select F
+      - run: python -m pip_audit -r requirements-hosted.lock --strict
+      - run: python -m build
+  postgres-isolation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.11-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
+        env:
+          POSTGRES_PASSWORD: disposable-ci-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --require-hashes -r requirements-hosted.lock
+      - run: python -m pip install '.[dev]'
+      - name: Create dedicated non-superuser test role
+        env:
+          PGPASSWORD: disposable-ci-only
+        run: |
+          psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE cleartrail_ci LOGIN PASSWORD 'disposable-app-only' NOSUPERUSER NOBYPASSRLS;"
+          psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE cleartrail_test OWNER cleartrail_ci;"
+      - run: python -m pytest tests/test_hosted_postgres.py -q
+        env:
+          CLEARTRAIL_TEST_POSTGRES_URL: postgresql+psycopg://cleartrail_ci:disposable-app-only@127.0.0.1:5432/cleartrail_test
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: docker build --tag cleartrail:ci .
+      - name: Fail on known High or Critical image vulnerabilities
+        run: |
+          docker image save --output cleartrail-ci-image.tar cleartrail:ci
+          docker run --rm --read-only --user 10001:10001 --cap-drop=ALL --security-opt=no-new-privileges --tmpfs /tmp:size=1073741824,mode=1777 --memory=2g --mount "type=bind,source=$PWD/cleartrail-ci-image.tar,target=/scan/image.tar,readonly" aquasec/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c image --input /scan/image.tar --cache-dir /tmp/cache --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --timeout 5m --no-progress
+      - name: Build and scan the optional evidence scanner
+        run: |
+          docker build --file deploy/clamav.Dockerfile --tag cleartrail-scanner:ci .
+          docker image save --output cleartrail-scanner-ci-image.tar cleartrail-scanner:ci
+          docker run --rm --read-only --user 10001:10001 --cap-drop=ALL --security-opt=no-new-privileges --tmpfs /tmp:size=1073741824,mode=1777 --memory=2g --mount "type=bind,source=$PWD/cleartrail-scanner-ci-image.tar,target=/scan/image.tar,readonly" aquasec/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c image --input /scan/image.tar --cache-dir /tmp/cache --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --timeout 5m --no-progress

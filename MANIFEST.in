@@ -1,0 +1,18 @@
+include LICENSE README.md SECURITY.md CONTRIBUTING.md pyproject.toml config.example.json
+include Dockerfile compose.yaml .dockerignore .gitignore .gitattributes .env.hosted.example
+include requirements-hosted.in requirements-hosted.lock
+include docs/research/manifest.json
+include docs/qa/results-0.5.json
+include docs/security/application-image-0.5.json docs/security/scanner-image-1.5.4-r1.json
+recursive-include deploy *.conf
+include deploy/clamav.Dockerfile
+recursive-include cleartrail *.py *.html *.css *.js
+recursive-include cleartrail/data/catalogs *.json
+recursive-include tests *.py
+recursive-include tests/fixtures *.b64
+recursive-include tests/fixtures *.sql *.json
+recursive-include scripts *.py
+recursive-include docs *.md *.jpg
+recursive-include .github *.yml *.md
+global-exclude *.pyc
+global-exclude __pycache__

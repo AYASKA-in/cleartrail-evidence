@@ -1,0 +1,6 @@
+**
+!requirements-hosted.lock
+!cleartrail/
+!cleartrail/**
+cleartrail/**/__pycache__/
+cleartrail/**/*.pyc

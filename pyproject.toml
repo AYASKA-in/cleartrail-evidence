@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=80.9,<90"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cleartrail-evidence"
+version = "0.5.0"
+description = "Free, local compliance evidence collection for small teams"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = []
+
+[project.optional-dependencies]
+aws = ["boto3>=1.35.99,<2"]
+hosted = ["fastapi>=0.159.1,<0.160", "sqlalchemy>=2.0.55,<2.1", "psycopg[binary]>=3.3.6,<3.4", "cryptography>=50.0.2,<51", "authlib>=1.9.1,<2", "uvicorn>=0.54,<0.55", "httpx>=0.28,<1", "itsdangerous>=2.2,<3", "boto3>=1.43.118,<2"]
+dev = ["pytest>=9.1,<10", "pip-audit>=2.9,<3", "build>=1.2,<2", "ruff>=0.17.2,<1"]
+
+[project.scripts]
+cleartrail = "cleartrail.__main__:main"
+
+[tool.setuptools.package-data]
+cleartrail = ["static/*", "data/catalogs/*.json"]
+
+[tool.setuptools.packages.find]
+include = ["cleartrail*"]

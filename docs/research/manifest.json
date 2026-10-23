@@ -1,0 +1,62 @@
+{
+  "investigation_date": "2026-10-23",
+  "scope": "Official public Vanta and Drata documentation pages only",
+  "raw_bundle": {
+    "file": "rea-public-reference-evidence.json",
+    "distribution": "local-only",
+    "bytes": 469710,
+    "sha256": "19e6fc5c1d6138c14d57327f06ebf0a2af74478432661ba1032fafc848bc9b82",
+    "records": 3
+  },
+  "successful_observations": [
+    {
+      "evidence_id": "ev_c0dac3290ec8c549ae3171f17fe2f9b35499c8507dc1eca37a15d41458c40645",
+      "url": "https://help.vanta.com/en/articles/14845240-github-integration-guide",
+      "authority": "controlled-replay",
+      "confidence": "observed",
+      "requested_capture_complete": true,
+      "application_behavior_verified": false,
+      "artifacts": {
+        "dom": {
+          "bytes": 320304,
+          "sha256": "2473d43cecfd537f49d8ebc502d3c67e711c28469da638d3840f08c13398627b"
+        },
+        "accessibility": {
+          "bytes": 18496,
+          "sha256": "a87d077256735d8a28efd98429e3b0d717fb39d30410ef614c7b25ea7818824b"
+        }
+      },
+      "cleanup": "terminated-owned-process"
+    },
+    {
+      "evidence_id": "ev_34276d97c4ab132372c987c70c6c048a874228faa6d3ff40f7d4188489ab9cf1",
+      "url": "https://help.drata.com/en/articles/13404035-evidence-overview",
+      "authority": "controlled-replay",
+      "confidence": "observed",
+      "requested_capture_complete": true,
+      "application_behavior_verified": false,
+      "artifacts": {
+        "accessibility": {
+          "bytes": 44620,
+          "sha256": "e86ed34fb87b37e695971656ac9df30e9c8c7f4266ab3d9e8faa0049f5d0dbc9"
+        }
+      },
+      "cleanup": "terminated-owned-process"
+    }
+  ],
+  "incomplete_observations": [
+    {
+      "evidence_id": "ev_0cb9b4ccce8d57a6142aeee6d8d0858f3a3fb025ed370eced1c2dd511683a462",
+      "url": "https://help.drata.com/en/articles/13404035-evidence-overview",
+      "reason": "Generic h1 locator matched multiple headings; exact-title selector used for successful follow-up.",
+      "requested_capture_complete": false,
+      "cleanup": "terminated-owned-process"
+    }
+  ],
+  "limitations": [
+    "Runtime captures observe documentation pages, not authenticated product behavior.",
+    "Events, network content, storage, screenshots and history were not requested.",
+    "Browser host platform, architecture and immutable application artifact identity were not observed.",
+    "No vendor algorithm, source equivalence, certification or auditor acceptance claim is established."
+  ]
+}

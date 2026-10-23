@@ -1,0 +1,159 @@
+{
+  "controls": [
+    {
+      "category": "Access security",
+      "frameworks": {
+        "ISO 27001:2022": "A.8.5",
+        "SOC 2": "CC6.1"
+      },
+      "id": "GH-MFA",
+      "provider": "github",
+      "remediation": "Require two-factor authentication for organization members.",
+      "title": "Organization MFA required"
+    },
+    {
+      "category": "Change management",
+      "frameworks": {
+        "ISO 27001:2022": "A.8.32",
+        "SOC 2": "CC8.1"
+      },
+      "id": "GH-REVIEW",
+      "provider": "github",
+      "remediation": "Require at least one approving review on the default branch.",
+      "title": "Code review required"
+    },
+    {
+      "category": "Change management",
+      "frameworks": {
+        "ISO 27001:2022": "A.8.29",
+        "SOC 2": "CC8.1"
+      },
+      "id": "GH-CI",
+      "provider": "github",
+      "remediation": "Require status checks before merging to the default branch.",
+      "title": "Automated checks required"
+    },
+    {
+      "category": "Change management",
+      "frameworks": {
+        "ISO 27001:2022": "A.8.32",
+        "SOC 2": "CC8.1"
+      },
+      "id": "GH-ADMIN",
+      "provider": "github",
+      "remediation": "Enable administrator enforcement on classic branch protection.",
+      "title": "Branch rules apply to admins"
+    },
+    {
+      "category": "Access security",
+      "frameworks": {
+        "ISO 27001:2022": "A.8.5",
+        "SOC 2": "CC6.1"
+      },
+      "id": "AWS-ROOT-MFA",
+      "provider": "aws",
+      "remediation": "Enable MFA for the AWS account root user.",
+      "title": "Root account MFA enabled"
+    },
+    {
+      "category": "Monitoring",
+      "frameworks": {
+        "ISO 27001:2022": "A.8.15",
+        "SOC 2": "CC7.2"
+      },
+      "id": "AWS-CLOUDTRAIL",
+      "provider": "aws",
+      "remediation": "Enable logging on discovered CloudTrail trails; separately review region coverage, event selectors, and delivery health.",
+      "title": "CloudTrail logging enabled"
+    },
+    {
+      "category": "Cloud security",
+      "frameworks": {
+        "ISO 27001:2022": "A.8.3",
+        "SOC 2": "CC6.6"
+      },
+      "id": "AWS-S3-PUBLIC",
+      "provider": "aws",
+      "remediation": "Enable all four bucket-level S3 public access block settings.",
+      "title": "S3 public access blocked"
+    },
+    {
+      "category": "Cloud security",
+      "frameworks": {
+        "ISO 27001:2022": "A.8.24",
+        "SOC 2": "CC6.1"
+      },
+      "id": "AWS-EBS-ENCRYPTION",
+      "provider": "aws",
+      "remediation": "Enable EBS encryption by default in the configured region.",
+      "title": "Default EBS encryption enabled"
+    },
+    {
+      "category": "Access security",
+      "frameworks": {
+        "ISO 27001:2022": "A.8.5",
+        "SOC 2": "CC6.1"
+      },
+      "id": "GOOGLE-2SV",
+      "provider": "google",
+      "remediation": "Enroll every active Google Workspace user in 2-step verification.",
+      "title": "People enrolled in 2-step verification"
+    },
+    {
+      "category": "Access security",
+      "frameworks": {
+        "ISO 27001:2022": "A.8.5",
+        "SOC 2": "CC6.1"
+      },
+      "id": "GOOGLE-2SV-ENFORCED",
+      "provider": "google",
+      "remediation": "Enforce 2-step verification for every active Google Workspace user.",
+      "title": "2-step verification enforced"
+    },
+    {
+      "category": "Access security",
+      "frameworks": {
+        "ISO 27001:2022": "A.5.18",
+        "SOC 2": "CC6.2"
+      },
+      "id": "GOOGLE-ADMINS",
+      "provider": "google",
+      "remediation": "Maintain at least two active super administrators under a documented access policy; this is a local recovery policy check.",
+      "title": "Two recovery administrators"
+    },
+    {
+      "category": "Governance",
+      "frameworks": {
+        "ISO 27001:2022": "A.5.1",
+        "SOC 2": "CC1.1"
+      },
+      "id": "MAN-POLICY",
+      "provider": "manual",
+      "remediation": "Record the owner and latest approved security policy review. Have a reviewer validate the supporting document.",
+      "title": "Security policy review"
+    },
+    {
+      "category": "Access security",
+      "frameworks": {
+        "ISO 27001:2022": "A.5.18",
+        "SOC 2": "CC6.2"
+      },
+      "id": "MAN-ACCESS",
+      "provider": "manual",
+      "remediation": "Document a periodic access review, reviewer, date, and any access removed.",
+      "title": "Periodic access review"
+    },
+    {
+      "category": "Monitoring",
+      "frameworks": {
+        "ISO 27001:2022": "A.5.24",
+        "SOC 2": "CC7.4"
+      },
+      "id": "MAN-INCIDENT",
+      "provider": "manual",
+      "remediation": "Record an incident response exercise and its follow-up actions.",
+      "title": "Incident response exercise"
+    }
+  ],
+  "version": "2026.10.1"
+}
