@@ -53,10 +53,11 @@ jobs:
       - run: docker build --tag cleartrail:ci .
       - name: Fail on known High or Critical image vulnerabilities
         run: |
+          mkdir -p "$RUNNER_TEMP/cleartrail-trivy-cache"
           docker image save --output cleartrail-ci-image.tar cleartrail:ci
-          docker run --rm --read-only --user 10001:10001 --cap-drop=ALL --security-opt=no-new-privileges --tmpfs /tmp:size=1073741824,mode=1777 --memory=2g --mount "type=bind,source=$PWD/cleartrail-ci-image.tar,target=/scan/image.tar,readonly" aquasec/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c image --input /scan/image.tar --cache-dir /tmp/cache --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --timeout 5m --no-progress
+          docker run --rm --read-only --user "$(id -u):$(id -g)" --cap-drop=ALL --security-opt=no-new-privileges --tmpfs /tmp:size=536870912,mode=1777,noexec,nosuid,nodev --memory=2g --mount "type=bind,source=$RUNNER_TEMP/cleartrail-trivy-cache,target=/cache" --mount "type=bind,source=$PWD/cleartrail-ci-image.tar,target=/scan/image.tar,readonly" aquasec/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c image --input /scan/image.tar --cache-dir /cache --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --timeout 5m --no-progress
       - name: Build and scan the optional evidence scanner
         run: |
           docker build --file deploy/clamav.Dockerfile --tag cleartrail-scanner:ci .
           docker image save --output cleartrail-scanner-ci-image.tar cleartrail-scanner:ci
-          docker run --rm --read-only --user 10001:10001 --cap-drop=ALL --security-opt=no-new-privileges --tmpfs /tmp:size=1073741824,mode=1777 --memory=2g --mount "type=bind,source=$PWD/cleartrail-scanner-ci-image.tar,target=/scan/image.tar,readonly" aquasec/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c image --input /scan/image.tar --cache-dir /tmp/cache --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --timeout 5m --no-progress
+          docker run --rm --read-only --user "$(id -u):$(id -g)" --cap-drop=ALL --security-opt=no-new-privileges --tmpfs /tmp:size=536870912,mode=1777,noexec,nosuid,nodev --memory=2g --mount "type=bind,source=$RUNNER_TEMP/cleartrail-trivy-cache,target=/cache" --mount "type=bind,source=$PWD/cleartrail-scanner-ci-image.tar,target=/scan/image.tar,readonly" aquasec/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c image --input /scan/image.tar --cache-dir /cache --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --timeout 5m --no-progress
