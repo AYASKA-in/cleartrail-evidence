@@ -50,7 +50,7 @@ services:
   clamav:
     profiles: [scanning]
     build: {context: ., dockerfile: deploy/clamav.Dockerfile}
-    image: cleartrail-scanner:1.5.4-r1
+    image: cleartrail-scanner:1.5.4-r2
     entrypoint: [/usr/sbin/clamd]
     command: [--config-file=/etc/clamav/clamd.conf]
     user: "100:101"
@@ -76,7 +76,7 @@ services:
   signature-updater:
     profiles: [scanning]
     build: {context: ., dockerfile: deploy/clamav.Dockerfile}
-    image: cleartrail-scanner:1.5.4-r1
+    image: cleartrail-scanner:1.5.4-r2
     entrypoint: [/usr/bin/freshclam]
     command: [--daemon, --config-file=/etc/clamav/freshclam.conf]
     user: "100:101"

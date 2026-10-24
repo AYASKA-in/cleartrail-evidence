@@ -17,12 +17,12 @@ customer credentials or real Google sign-in was used.
 | Static checks | Ruff F and JavaScript syntax passed; explicit asset MIME types regression added after Windows registry default blocked JavaScript with nosniff |
 | AWS template | cfn-lint passed locally for Mumbai resource schemas/dependencies; account/AMI/quota/credit/price checks and CloudFormation execution **not performed** |
 | Application image | `sha256:be4a4dd4e011fbb479b6e91378ace5932a29a0275fc7611c4889e519a344a694`; Trivy 0.76.1, zero known vulnerability matches at all severities, scan 24 October 2026 UTC |
+| Patched scanner | `sha256:9d96243b774cd1d0c424bf707555d3615628601d8c29b6c8b6c582217896f957`; vendor Brotli fix and native smoke passed; zero known matches with a fresh database updated 24 October 2026 07:11 UTC |
 
 The Linux test harness initially mounted tests outside the package tree, breaking
 isolated verifier subprocess imports. Mounting under `/app/tests` corrected the
 harness; the final complete Linux run passed. The mobile CSS correction was
-browser-checked and the final image rebuilt/rescanned afterward. Runtime Python
-dependencies and scanner image are unchanged from 0.5.
+browser-checked and the final image rebuilt/rescanned afterward. Runtime Python dependencies are unchanged. Mandatory remote CI detected CVE-2026-111497 in the old scanner base; revision 1.5.4-r2 pins the vendor-fixed Brotli library. Its native engine accepted clean PDF/Office fixtures and detected a synthetic custom signature with networking disabled. This does not validate production signature freshness.
 
 Four warnings are two upstream HTTPX deprecations and two intentional duplicate
 ZIP attack fixtures. Scanner acceptance, document-inclusive package browser QA,
@@ -32,7 +32,7 @@ measurements. Current regressions retain those behaviors. The current wheel/sour
 
 Screenshots: [desktop](qa/governance-desktop-0.6.png),
 [mobile](qa/governance-mobile-0.6.png). Image inventory:
-[application-image-0.6.json](security/application-image-0.6.json).
+[application-image-0.6.json](security/application-image-0.6.json) and [scanner-image-1.5.4-r2.json](security/scanner-image-1.5.4-r2.json).
 Private QA configurations, realm credentials, database dumps, raw exports and
 original reference PDFs are excluded from source releases.
 

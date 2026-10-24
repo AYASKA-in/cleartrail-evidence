@@ -429,7 +429,7 @@ that another deployment or a future dependency scan will match:
 | Real local browser identity | Keycloak code/PKCE and distinct identities; risk/applicability forms, review and register download |
 | Offline verification | Browser-downloaded governance register matched its trusted SHA-256; isolated standard-library verification tested |
 | AWS infrastructure | Local CloudFormation lint passed for Mumbai; no account-level validation or deployment performed |
-| Image audit | Final 0.6 application image: zero known vulnerability matches at the recorded scan time |
+| Image audit | Final application and vendor-patched scanner: zero known vulnerability matches at the recorded scan time |
 
 Detailed file scanning, document packages and the 81.38-second logical recovery
 rehearsal were exercised in [0.5](docs/VALIDATION_0_5.md). They were not repeated

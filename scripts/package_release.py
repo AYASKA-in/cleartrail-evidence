@@ -13,6 +13,7 @@ paths.append(root / "docs" / "research" / "manifest.json")
 paths.extend(root / name for name in ("docs/qa/results-0.5.json", "docs/security/application-image-0.5.json", "docs/security/application-image-0.6.json", "docs/security/scanner-image-1.5.4-r1.json", "docs/qa/governance-desktop-0.6.png", "docs/qa/governance-mobile-0.6.png"))
 paths.extend((root / "deploy").glob("*.conf"))
 paths.append(root / "deploy" / "clamav.Dockerfile")
+paths.append(root / "docs" / "security" / "scanner-image-1.5.4-r2.json")
 paths.extend((root / "deploy" / "aws").glob("*.yaml"))
 for folder in ("cleartrail", "tests", "scripts", "docs"):
     for path in (root / folder).rglob("*"):

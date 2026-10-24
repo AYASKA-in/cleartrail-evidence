@@ -31,13 +31,18 @@ session and export boundaries remain in [the 0.5 review](SECURITY_REVIEW_0_5.md)
 
 ## Supply chain and deployment
 
-The runtime lock, pinned Python base and scanner are unchanged. Trivy 0.76.1
+The runtime lock and pinned Python base are unchanged. Scanner revision 1.5.4-r2 adds Alpine’s exact `brotli-libs=1.2.1-r0` vendor patch alongside the existing libc fix. Trivy 0.76.1
 scanned the final 0.6 application archive on 24 October 2026 UTC and found zero
 known vulnerability matches at all severities:
 `sha256:be4a4dd4e011fbb479b6e91378ace5932a29a0275fc7611c4889e519a344a694`.
 See [inventory](security/application-image-0.6.json). This is a dated database
-match, not proof against unknown vulnerabilities or source logic flaws. The
-unchanged scanner's last scan is recorded separately in the 0.5 review.
+match, not proof against unknown vulnerabilities or source logic flaws. Mandatory remote CI caught CVE-2026-111497 in the old scanner base (`brotli-libs` 1.2.0-r1). The fixed revision was rebuilt and its native engine smoke-tested with clean PDF/Office fixtures and a synthetic custom signature. This is not a repeat of production-definition freshness validation. See [upstream fix](https://github.com/google/brotli/releases/tag/v1.2.1) and the [new scanner inventory](security/scanner-image-1.5.4-r2.json).
+
+Both images were rescanned with a fresh database updated
+`2026-10-24T07:11:13Z`, downloaded into an empty task cache. The patched scanner
+`sha256:9d96243b774cd1d0c424bf707555d3615628601d8c29b6c8b6c582217896f957`
+reported zero known matches at all severities. No advisory suppression or gate
+weakening was used. Older scan records are time-specific historical evidence.
 
 The Mumbai CloudFormation candidate requires an explicit HTTP/HTTPS tester CIDR,
 encrypted EBS, IMDSv2 and an SSM-only host role. It opens no SSH/database/scanner
