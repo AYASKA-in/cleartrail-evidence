@@ -16,8 +16,10 @@ authentication bypass. A configured OIDC provider is required in every mode.
   Register exactly `https://YOUR_HOST/auth/callback`, enable required MFA at the
   IdP, and obtain the initial administrator's exact `iss` and `sub` claims.
 - HTTPS ingress in front of the API, preserving the configured Host. Shared
-  request/connection/rate limits, body limit 128 KiB, a 10-second client-body
-  timeout, and a 64-connection upstream concurrency budget are starting limits.
+  request/connection/rate limits, a 128 KiB default body limit and a 1 MiB limit
+  specifically for `/api/documents/upload`, a 10-second client-body timeout, and
+  a 64-connection upstream concurrency budget are starting limits. The app still
+  enforces its tighter base64-plus-metadata upload budget and 512 KiB file limit.
 - A secret manager or securely delivered environment for the database URL, OIDC
   client secret, session-state signing secret and vault key ring. Never put real
   values in a Dockerfile, image, source ZIP, issue, screenshot or commit.
