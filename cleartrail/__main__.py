@@ -45,6 +45,9 @@ def main(argv=None):
     audit_verify = sub.add_parser("verify-audit", help="Verify a document-inclusive audit package without extracting files")
     audit_verify.add_argument("bundle")
     audit_verify.add_argument("--expected-manifest-sha256", "--manifest-sha256", dest="expected_manifest_sha256")
+    governance_verify = sub.add_parser("verify-governance", help="Verify a governance register offline without executing content")
+    governance_verify.add_argument("register")
+    governance_verify.add_argument("--expected-sha256")
     for name in ("doctor", "backup"):
         item = sub.add_parser(name)
         item.add_argument("--db", required=True)
@@ -52,6 +55,10 @@ def main(argv=None):
             item.add_argument("--output", required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "verify-governance":
+            from .governance import verify_governance
+            print(json.dumps(verify_governance(args.register, args.expected_sha256), indent=2))
+            return 0
         if args.command == "verify-audit":
             from .audit_packages import verify_audit_package
             print(json.dumps(verify_audit_package(args.bundle, args.expected_manifest_sha256), indent=2))

@@ -97,7 +97,7 @@ docker compose up -d api worker scheduler
 Compose publishes the API only on the host loopback address, uses non-root users,
 a read-only root filesystem, private temporary memory, dropped capabilities and
 resource budgets. Provision PostgreSQL, HTTPS ingress and secrets separately.
-There is no public port or automatic cloud deployment in this project. Hosting,
+There is no public application API port or automatic application deployment. Hosting,
 provider services, identity infrastructure and audits can have costs despite the
 MIT-licensed software being free.
 
@@ -212,7 +212,17 @@ python -m pip install --require-hashes -r requirements-hosted.lock
 ```
 
 Review the lock diff, audit, tests and Linux container build before release.
-Schema version 4 explicitly migrates versions 1–3 while preserving source evidence, schedules, ciphertext and jobs. A version 1 upgrade leaves scheduling disabled. Migration is idempotent; future incompatible schemas still need reviewed migrations and recovery plans before deployment.
+Schema version 5 explicitly migrates versions 1–4 while preserving source evidence, schedules, ciphertext and jobs. A version 1 upgrade leaves scheduling disabled. Migration is idempotent; future incompatible schemas still need reviewed migrations and recovery plans before deployment.
+
+## Governance in 0.6
+
+Schema 5 adds `ct_governance_records`, `ct_governance_versions` and
+`ct_governance_reviews`. Grant the runtime role DML on these tables after the
+schema-owner migration. Forced RLS is required on 17 tenant-scoped tables.
+Vault rotation and backups include governance payloads. Read
+[GOVERNANCE.md](GOVERNANCE.md) for approval/evidence-link semantics and limits.
+For a credit-funded Mumbai staging candidate, see
+[AWS_STAGING.md](AWS_STAGING.md). That template has not been provisioned in AWS.
 
 
 ## Recurring collection in 0.3

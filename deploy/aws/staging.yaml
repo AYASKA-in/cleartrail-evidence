@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ClearTrail single-host staging infrastructure; application installation is a separate operator step.
+Parameters:
+  InstanceType:
+    Type: String
+    Default: m7i-flex.large
+    AllowedValues: [m7i-flex.large]
+    Description: Verify Free Plan eligibility, Mumbai availability and current price before creating a change set.
+  ImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: Resolve and review the AL2023 x86-64 AMI in the change set before launch.
+  AvailabilityZone:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: Select a Mumbai AZ where the chosen instance type is offered.
+  IngressCidr:
+    Type: String
+    AllowedPattern: '(\d{1,3}\.){3}\d{1,3}/\d{1,2}'
+    Description: Your staging testers' public IPv4 CIDR (for example a single /32). Public access requires deliberate 0.0.0.0/0.
+  DataGiB:
+    Type: Number
+    Default: 40
+    MinValue: 40
+    MaxValue: 100
+    Description: Encrypted gp3 data disk, retained after stack deletion and still billable.
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.76.0.0/24
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-staging'}]
+  Gateway:
+    Type: AWS::EC2::InternetGateway
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: {VpcId: !Ref Vpc, InternetGatewayId: !Ref Gateway}
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.76.0.0/26
+      AvailabilityZone: !Ref AvailabilityZone
+      MapPublicIpOnLaunch: true
+  Routes:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref Vpc}
+  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties: {RouteTableId: !Ref Routes, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref Gateway}
+  SubnetRoutes:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref Subnet, RouteTableId: !Ref Routes}
+  Firewall:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTPS staging and optional HTTP certificate challenge; administration uses SSM.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: !Ref IngressCidr}
+        - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: !Ref IngressCidr}
+      SecurityGroupEgress:
+        - {IpProtocol: '-1', CidrIp: 0.0.0.0/0}
+  HostRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ec2.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns: [!Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore']
+  HostProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: {Roles: [!Ref HostRole]}
+  Host:
+    Type: AWS::EC2::Instance
+    DependsOn: [InternetRoute, SubnetRoutes]
+    Properties:
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref HostProfile
+      SubnetId: !Ref Subnet
+      SecurityGroupIds: [!Ref Firewall]
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+        InstanceMetadataTags: disabled
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs: {VolumeSize: 30, VolumeType: gp3, Encrypted: true, DeleteOnTermination: true}
+      Tags:
+        - {Key: Name, Value: !Sub '${AWS::StackName}-host'}
+        - {Key: Purpose, Value: cleartrail-staging}
+  Data:
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone
+      Size: !Ref DataGiB
+      VolumeType: gp3
+      Encrypted: true
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-data-retained'}]
+  DataAttachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties: {InstanceId: !Ref Host, VolumeId: !Ref Data, Device: /dev/sdf}
+Outputs:
+  InstanceId:
+    Value: !Ref Host
+  PublicIp:
+    Description: Ephemeral; changes on stop/start. Recheck DNS and TLS after restarting.
+    Value: !GetAtt Host.PublicIp
+  DataVolumeId:
+    Description: Retained after deletion. Back up, then delete explicitly when no longer needed.
+    Value: !Ref Data
+  Administration:
+    Value: !Sub 'Use Systems Manager Session Manager for ${Host}; there is no SSH listener or inbound SSH rule.'

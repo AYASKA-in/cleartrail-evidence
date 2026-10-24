@@ -195,3 +195,19 @@ Operational launch still needs actual hosting/TLS/IdP/provider validation, exter
 alerts, off-host PITR, capacity/soak evidence and independent security/auditor review.
 See [RELEASE_GATES.md](RELEASE_GATES.md). The software remains MIT-licensed; operated
 hosting, provider subscriptions and independent audit costs are not made free by it.
+
+## Implementation update: 0.6
+
+The hosted governance register now includes customer-authored risk, applicability,
+internal audit, management review and corrective action records, with immutable
+encrypted payloads, independent approvals and exact evidence-version links. It
+offers the 93 Annex A reference IDs without licensed control text and a separate
+bounded JSON export/offline verifier. See [GOVERNANCE.md](GOVERNANCE.md). This is
+a starter recordkeeping workflow, not complete risk/SoA certification coverage.
+
+A Mumbai AWS Free Plan account has been selected for staging; the infrastructure
+template and [credit-funded staging guide](AWS_STAGING.md) are prepared. No account
+connection, price/credit/AMI validation or AWS provisioning has occurred. Hosting
+and independent review remain operational responsibilities. Custom risk scoring,
+automated remediation routing, unified signed engagement packages, printable SoA,
+retention/offboarding and broader provider coverage remain development areas.

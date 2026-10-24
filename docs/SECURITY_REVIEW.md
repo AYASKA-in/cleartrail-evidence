@@ -1,61 +1,60 @@
-# Internal security review: 0.5.0
+# Internal security review: 0.6.0
 
-Reviewed 23–24 October 2026 using synthetic fixtures, source inspection, tests
-and local containers. This is an internal assessment, not an independent
-penetration test or compliance certificate.
+Reviewed 24 October 2026 through source inspection, synthetic regressions,
+real PostgreSQL and local browser OIDC. This is an internal assessment, not an
+independent penetration test or certification. Prior reviewed file/scanner,
+session and export boundaries remain in [the 0.5 review](SECURITY_REVIEW_0_5.md).
 
-## Remediation and boundaries
+## Governance boundaries
 
-- Session rate budgets use canonical capabilities/IPs; unrelated cookies cannot
-  reset the budget. A separate IP budget bounds token churn. Shared limits across
-  API replicas remain an ingress responsibility.
-- Office ZIP/XML parsing bounds members/decompression and rejects unsafe paths,
-  DTD/entities, external relationships, macro/embedded-object indicators and bad
-  deflate streams. Scanning finishes before publication; stale/unavailable/limited
-  scanner responses fail closed. Authenticated envelopes bind scan provenance.
-- Audit verification validates review/document/control graphs, regenerates HTML,
-  checks trusted digests, and never extracts/executes customer files. Packages are
-  unsigned; scans/approval are recorded as of export and cannot recall downloads.
-- Real browser QA found and fixed CSP-blocked chart styles and broken Unicode.
-  An XSS-like synthetic document title remained escaped text.
-- Final runtime uses pinned Alpine Python and unchanged hash-locked dependencies,
-  with unused pip/ensurepip removed. The scanner applies an exact available libc
-  patch rather than suppressing its advisory match.
+- Every operation validates membership and tenant scope. Mutation routes require
+  CSRF, exact origin and active workspace. Three new tables have composite tenant
+  foreign keys and forced RLS, bringing the scoped population to 17 tables.
+- Canonical payloads have bounded fields, links, versions and quotas. MultiFernet
+  envelopes bind identity, title/owner, type/reference, author/time and digest.
+  Governance payloads participate in transactional vault rotation. Search/review
+  metadata remains visible to trusted database operators.
+- Edits create pending versions. Optimistic record/review identifiers and tenant
+  locks serialize competing mutations. Authors/owners cannot approve themselves;
+  auditors cannot write. Withdrawal remains possible for older/damaged versions.
+- Review/export rechecks exact linked evidence and governance approvals, expiry
+  and envelope integrity. Missing/revoked dependencies fail closed. The app's
+  approved badge represents a historical decision, not continuous revalidation.
+- The separate bounded JSON export includes approved dependency closure. Its
+  standard-library verifier rejects malformed schemas, duplicate identities,
+  invalid review histories, inconsistent scores/digests and invalid/cyclic links.
+  It does not execute content or extract files. Exports are unsigned; trusted
+  external digests are necessary against full rewrites. File bytes are separate.
+- Browser values remain escaped text. Real QA tested an XSS-like title, separate
+  reviewer identity, auditor controls and desktop/mobile layouts. Explicit MIME
+  types fix OS-dependent asset inference while retaining nosniff and the CSP.
 
-## Static analysis triage
+## Supply chain and deployment
 
-Ruff F passes. Ruff S returned four contextual alerts, retained for review:
+The runtime lock, pinned Python base and scanner are unchanged. Trivy 0.76.1
+scanned the final 0.6 application archive on 24 October 2026 UTC and found zero
+known vulnerability matches at all severities:
+`sha256:be4a4dd4e011fbb479b6e91378ace5932a29a0275fc7611c4889e519a344a694`.
+See [inventory](security/application-image-0.6.json). This is a dated database
+match, not proof against unknown vulnerabilities or source logic flaws. The
+unchanged scanner's last scan is recorded separately in the 0.5 review.
 
-| Rule / source | Disposition |
-|---|---|
-| S110 `collector_process.py` | Redaction fallback deliberately avoids logging potentially secret-bearing exception text or corrupting the child protocol; parent receives a generic failure. |
-| S310 `connectors.py` | URL calls are behind exact HTTPS scheme/origin checks, no redirects and response/request budgets; arbitrary file/custom-scheme destinations are rejected. |
-| S314 `documents.py` | Bounded UTF-8 XML rejects NUL, DTD and ENTITY declarations before ElementTree; no XInclude resolution; external relationships denied. Keep Python/Expat patched and expand corpus/fuzz testing. |
-| S603 `isolated.py` | Absolute trusted interpreter, isolated mode, fixed script/argv, no shell, restricted environment, deadlines and output bounds. Credential-context separation is not an untrusted-code sandbox. |
+The Mumbai CloudFormation candidate requires an explicit HTTP/HTTPS tester CIDR,
+encrypted EBS, IMDSv2 and an SSM-only host role. It opens no SSH/database/scanner
+or application API port. No secrets or application installer run through user
+data. Data EBS retention protects against stack deletion but continues consuming
+credits and does not substitute for backup. Public IPv4, broad outbound internet,
+a single host, temporary funding and a floating AMI parameter remain operator
+tradeoffs requiring review. A change set must be checked before execution.
 
-These are internal review decisions, not proof that the primitives have no bugs.
-No unreviewed blanket suppression was introduced.
+## Remaining work before customer launch
 
-## Supply chain
+No AWS resources, actual Google client, public TLS/DNS, provider customer accounts,
+off-host restore or sustained 8 GiB capacity test were exercised. Do not mark
+these gates passed based on local fixtures. Customer ownership, risk acceptance,
+assessor independence/competence and audit scope require human judgment.
 
-Trivy 0.76.1 scanned saved image archives without the Docker socket, against the
-fresh database obtained on 23 October 2026 UTC. Both final images reported
-**zero known vulnerability matches across all severities**:
-
-- Application `sha256:83ff48d8c948dbd1104ecaf0bad37de35ec9827b337b7350e68c9cd583f6469a`.
-- Scanner `sha256:425e3a320c6054bef7a52d51dda9e5b1241f1c28a26b76541342fb8b4a34c455`.
-
-Reports under `docs/security/` preserve inventories/timestamps. Earlier Debian
-base advisory matches were not claims of confirmed application exploits. Final
-images were rescanned after remediation. `pip-audit` reported no known
-vulnerabilities in the 36-distribution runtime lock. Results are time-specific,
-exclude operator IdP/PostgreSQL/ingress and do not detect source logic flaws or
-zero-days. Rescan regularly; CI gates known High/Critical image findings.
-
-Operators, database administrators, IdP and worker host remain trusted. Fourteen
-evidence tables use forced RLS; control-plane membership/session tables are scoped
-by application queries. Stolen operator keys/arbitrary SQL need infrastructure
-defenses. AV does not make files safe to execute. A small local read-load test
-does not establish production capacity. Independent security/auditor review,
-off-host recovery, managed keys, external anchors, retention and incident handling
-remain explicit [release gates](RELEASE_GATES.md).
+Retention/deletion automation, fine-grained auditor engagements, signed unified
+packages, custom scoring, external immutable audit anchors and wider governance
+automation remain future work. Trusted operators, database administrators, IdP
+and worker host can affect the system; RLS is not protection from those parties.

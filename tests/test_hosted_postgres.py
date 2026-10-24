@@ -18,6 +18,8 @@ from cleartrail.hosted_repository import (Repository, credentials, occurrences, 
                                          monitoring, job_heads, schema, documents, document_versions, document_reviews)
 from cleartrail.documents import DocumentConflict
 from test_documents import payload
+from test_governance import payload as governance_payload
+from cleartrail.hosted_repository import governance_records, governance_versions, governance_reviews
 from cleartrail.hosted_settings import HostedSettings
 
 URL = os.environ.get("CLEARTRAIL_TEST_POSTGRES_URL")
@@ -108,7 +110,7 @@ def test_v1_upgrade_preserves_postgres_evidence_and_restores_rls(pg):
     # Only the explicitly disposable test database is used. Remove the additive
     # v2 tables to reproduce the real v1 shape, preserving all v1 business data.
     with repo.engine.begin() as db:
-        for table in (document_reviews, document_versions, documents, job_heads, monitoring, notifications, occurrences, schedules):
+        for table in (governance_reviews, governance_versions, governance_records, document_reviews, document_versions, documents, job_heads, monitoring, notifications, occurrences, schedules):
             table.drop(db)
         db.execute(update(schema).values(version=1))
     with pytest.raises(ValueError):
@@ -119,6 +121,31 @@ def test_v1_upgrade_preserves_postgres_evidence_and_restores_rls(pg):
     assert repo.schedule(a)["enabled"] is False
     with repo.scoped(b) as (db, _):
         assert list(db.execute(select(monitoring).where(monitoring.c.tenant_id == a))) == []
+
+
+def test_governance_rls_and_serialized_revisions(pg):
+    repo, a, b = pg
+    repo.set_member(a, "alice", "reviewer", "operator")
+    first = repo.save_governance(a, "alice", governance_payload())
+    repo.review_governance(a, "reviewer", first["version_id"], "approved", "Reviewed risk", None)
+    with repo.engine.connect() as db:
+        for table in (governance_records, governance_versions, governance_reviews):
+            assert list(db.execute(select(table))) == []
+    with repo.scoped(b) as (db, _):
+        for table in (governance_records, governance_versions, governance_reviews):
+            assert list(db.execute(select(table))) == []
+    with pytest.raises(DBAPIError):
+        with repo.scoped(b) as (db, _):
+            db.execute(insert(governance_records).values(tenant_id=a, id=__import__('uuid').uuid4().hex, kind="risk", reference=None, revision=1))
+    change = governance_payload(record_id=first["record_id"], expected_revision=1)
+    def attempt(_):
+        try:
+            return repo.save_governance(a, "alice", change)
+        except DocumentConflict:
+            return None
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        assert len([r for r in pool.map(attempt, range(4)) if r]) == 1
+    assert repo.governance_detail(a, "alice", first["record_id"])["revision"] == 2
 
 
 def test_document_rls_versions_and_concurrent_reviews(pg):

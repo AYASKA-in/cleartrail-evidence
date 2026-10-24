@@ -24,8 +24,9 @@ from .errors import EvidenceIntegrityError
 from .monitoring import (DEFAULT_INTERVAL_HOURS, DEFAULT_FRESHNESS_HOURS, SCHEDULE_GRACE_SECONDS,
                          validate_schedule, evidence_health, monitoring_projection)
 from .document_repository import DocumentRepository
+from .governance_repository import GovernanceRepository
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 ROLES = {"admin", "operator", "auditor"}
 meta = MetaData()
 schema = Table("ct_schema", meta, Column("version", Integer, primary_key=True))
@@ -111,8 +112,25 @@ document_reviews = tenant_table("document_reviews", Column("id", String(36), pri
                                 constraints=(ForeignKeyConstraint(["tenant_id", "version_id"], ["ct_document_versions.tenant_id", "ct_document_versions.id"]),
                                              UniqueConstraint("tenant_id", "version_id", "sequence"),
                                              CheckConstraint("decision IN ('approved','rejected','withdrawn') AND sequence BETWEEN 1 AND 20")))
+governance_records = tenant_table("governance_records", Column("id", String(36), primary_key=True),
+    Column("kind", String(32), nullable=False), Column("reference", String(24)), Column("revision", Integer, nullable=False),
+    constraints=(UniqueConstraint("tenant_id", "kind", "reference"), CheckConstraint("revision BETWEEN 1 AND 20"),
+                 CheckConstraint("kind IN ('risk','applicability','internal_audit','management_review','corrective_action')")))
+governance_versions = tenant_table("governance_versions", Column("id", String(36), primary_key=True),
+    Column("record_id", String(36), nullable=False), Column("number", Integer, nullable=False), Column("kind", String(32), nullable=False),
+    Column("title", String(160), nullable=False), Column("owner", String(255), nullable=False), Column("reference", String(24)),
+    Column("created_by", String(255), nullable=False), Column("created_at", BigInteger, nullable=False),
+    Column("size", Integer, nullable=False), Column("sha256", String(64), nullable=False), Column("envelope", Text, nullable=False),
+    constraints=(ForeignKeyConstraint(["tenant_id", "record_id"], ["ct_governance_records.tenant_id", "ct_governance_records.id"]),
+                 UniqueConstraint("tenant_id", "record_id", "number"), CheckConstraint("number BETWEEN 1 AND 20 AND size BETWEEN 1 AND 16384")))
+governance_reviews = tenant_table("governance_reviews", Column("id", String(36), primary_key=True),
+    Column("version_id", String(36), nullable=False), Column("sequence", Integer, nullable=False), Column("decision", String(16), nullable=False),
+    Column("reviewer", String(255), nullable=False), Column("comment", String(2000), nullable=False), Column("created_at", BigInteger, nullable=False),
+    constraints=(ForeignKeyConstraint(["tenant_id", "version_id"], ["ct_governance_versions.tenant_id", "ct_governance_versions.id"]),
+                 UniqueConstraint("tenant_id", "version_id", "sequence"),
+                 CheckConstraint("decision IN ('approved','rejected','withdrawn') AND sequence BETWEEN 1 AND 20")))
 SCOPED = (credentials, notes, revisions, runs, jobs, audit, schedules, occurrences, notifications, monitoring, job_heads,
-          documents, document_versions, document_reviews)
+          documents, document_versions, document_reviews, governance_records, governance_versions, governance_reviews)
 
 
 def _json(value):
@@ -125,7 +143,7 @@ def tenant_id(value):
     return value
 
 
-class Repository(DocumentRepository):
+class Repository(GovernanceRepository, DocumentRepository):
     def __init__(self, settings):
         self.settings = settings
         options = {"pool_pre_ping": True}
@@ -150,7 +168,7 @@ class Repository(DocumentRepository):
             if self.engine.dialect.name == "postgresql":
                 db.execute(sql("SELECT pg_advisory_xact_lock(648236173)"))
             versions = list(db.execute(select(schema.c.version)).scalars()) if inspect(db).has_table(schema.name) else []
-            if versions not in ([], [1], [2], [3], [SCHEMA_VERSION]):
+            if versions not in ([], [1], [2], [3], [4], [SCHEMA_VERSION]):
                 raise ValueError("Unsupported hosted schema version.")
             # Additive migrations preserve existing evidence, jobs and audit rows.
             meta.create_all(db)
@@ -179,7 +197,7 @@ class Repository(DocumentRepository):
                     latest_job = db.execute(select(jobs.c.id).where(jobs.c.tenant_id == tenant).order_by(jobs.c.status.in_(["queued", "running"]).desc(), jobs.c.created_at.desc(), jobs.c.finished_at.desc(), jobs.c.id.desc()).limit(1)).scalar()
                     if latest_job:
                         db.execute(insert(job_heads).values(tenant_id=tenant, job_id=latest_job))
-            if versions in ([1], [2], [3]):
+            if versions in ([1], [2], [3], [4]):
                 db.execute(update(schema).values(version=SCHEMA_VERSION))
 
     def ready(self):
@@ -190,7 +208,7 @@ class Repository(DocumentRepository):
                 role = db.execute(sql("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname=current_user")).one()
                 if role[0] or role[1]:
                     raise ValueError("Hosted database role must not bypass row-level security.")
-                count = db.execute(sql("SELECT count(*) FROM pg_class WHERE relnamespace=current_schema()::regnamespace AND relname IN ('ct_credentials','ct_notes','ct_revisions','ct_runs','ct_jobs','ct_audit','ct_schedules','ct_schedule_occurrences','ct_notifications','ct_monitoring','ct_job_heads','ct_documents','ct_document_versions','ct_document_reviews') AND relrowsecurity AND relforcerowsecurity")).scalar_one()
+                count = db.execute(sql("SELECT count(*) FROM pg_class WHERE relnamespace=current_schema()::regnamespace AND relname IN ('ct_credentials','ct_notes','ct_revisions','ct_runs','ct_jobs','ct_audit','ct_schedules','ct_schedule_occurrences','ct_notifications','ct_monitoring','ct_job_heads','ct_documents','ct_document_versions','ct_document_reviews','ct_governance_records','ct_governance_versions','ct_governance_reviews') AND relrowsecurity AND relforcerowsecurity")).scalar_one()
                 if count != len(SCOPED):
                     raise ValueError("Tenant row-level security is not installed.")
         return True
@@ -368,7 +386,8 @@ class Repository(DocumentRepository):
                 envelope = self.vault.seal(tenant, row["provider"], self.vault.open(tenant, row["provider"], row["envelope"]))
                 db.execute(update(credentials).where(credentials.c.tenant_id == tenant, credentials.c.provider == row["provider"]).values(envelope=envelope))
             self.rotate_document_keys(db, tenant)
-            self._audit(db, tenant, "operator-cli", "vault.rotated", {"count": len(rows), "documents_rotated": True})
+            self.rotate_governance_keys(db, tenant)
+            self._audit(db, tenant, "operator-cli", "vault.rotated", {"count": len(rows), "documents_rotated": True, "governance_rotated": True})
             return len(rows)
 
     def _notes(self, db, tenant):

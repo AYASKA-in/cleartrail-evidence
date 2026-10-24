@@ -4,7 +4,10 @@ include requirements-hosted.in requirements-hosted.lock
 include docs/research/manifest.json
 include docs/qa/results-0.5.json
 include docs/security/application-image-0.5.json docs/security/scanner-image-1.5.4-r1.json
+include docs/security/application-image-0.6.json
+include docs/qa/governance-desktop-0.6.png docs/qa/governance-mobile-0.6.png
 recursive-include deploy *.conf
+recursive-include deploy/aws *.yaml
 include deploy/clamav.Dockerfile
 recursive-include cleartrail *.py *.html *.css *.js
 recursive-include cleartrail/data/catalogs *.json

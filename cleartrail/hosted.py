@@ -203,7 +203,10 @@ def create_app(settings=None, repository=None):
 
     def asset(filename):
         def static_file():
-            return FileResponse(STATIC / filename)
+            # OS MIME registries can label .js as text/plain; nosniff then
+            # correctly blocks execution. Serve our fixed assets explicitly.
+            media = {"index.html": "text/html", "app.js": "text/javascript", "style.css": "text/css"}
+            return FileResponse(STATIC / filename, media_type=media[filename])
         return static_file
 
     for route, filename in (("/", "index.html"), ("/app.js", "app.js"), ("/style.css", "style.css")):
@@ -291,6 +294,53 @@ def create_app(settings=None, repository=None):
     def audit_package_options(request: Request):
         identity = session(request)
         return {"versions": repo.audit_options(identity["active_tenant"], identity["subject"])}
+
+    @app.get("/api/governance")
+    def governance_list(request: Request):
+        identity = session(request)
+        if request.query_params:
+            raise HTTPException(400, "Governance queries cannot select a workspace.")
+        return repo.governance_list(identity["active_tenant"], identity["subject"])
+
+    @app.get("/api/governance/options")
+    def governance_options(request: Request):
+        identity = session(request, roles={"admin", "operator"})
+        if request.query_params:
+            raise HTTPException(400, "Invalid governance query.")
+        return repo.governance_options(identity["active_tenant"], identity["subject"])
+
+    @app.post("/api/governance/save")
+    async def governance_save(request: Request):
+        identity = await async_session(request, {"admin", "operator"})
+        value = await body(request, {"record_id", "kind", "title", "owner", "expected_revision", "payload"})
+        return await run_in_threadpool(repo.save_governance, identity["active_tenant"], identity["subject"], value)
+
+    @app.post("/api/governance/review")
+    async def governance_review(request: Request):
+        identity = await async_session(request, {"admin", "operator"})
+        value = await body(request, {"version_id", "decision", "comment", "expected_review_id"})
+        return await run_in_threadpool(repo.review_governance, identity["active_tenant"], identity["subject"], **value)
+
+    @app.post("/api/governance/export")
+    async def governance_export(request: Request):
+        identity = await async_session(request, {"admin", "operator", "auditor"})
+        await body(request, set())
+        try:
+            await asyncio.wait_for(export_slots.acquire(), timeout=1)
+        except asyncio.TimeoutError:
+            return JSONResponse({"error": "Another export is running. Try again shortly."}, status_code=429, headers={"Retry-After": "5"})
+        try:
+            raw, sha = await run_in_threadpool(repo.governance_export, identity["active_tenant"], identity["subject"])
+            return Response(raw, media_type="application/json", headers={"Content-Disposition": 'attachment; filename="cleartrail-governance-register.json"', "X-ClearTrail-SHA256": sha})
+        finally:
+            export_slots.release()
+
+    @app.get("/api/governance/{record_id}")
+    def governance_detail(request: Request, record_id: str):
+        identity = session(request)
+        if request.query_params:
+            raise HTTPException(400, "Invalid governance query.")
+        return repo.governance_detail(identity["active_tenant"], identity["subject"], record_id)
 
     @app.post("/api/documents/assign")
     async def document_assign(request: Request):

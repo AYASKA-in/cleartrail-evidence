@@ -59,6 +59,14 @@ def test_anonymous_reads_and_writes_are_denied(setup):
     assert client.get("/readyz").json() == {"ready": True}
 
 
+def test_static_assets_use_explicit_types_with_nosniff(setup):
+    for route, media in (("/", "text/html"), ("/app.js", "text/javascript"), ("/style.css", "text/css")):
+        result = setup[4].get(route)
+        assert result.status_code == 200
+        assert result.headers["content-type"].split(";")[0] == media
+        assert result.headers["x-content-type-options"] == "nosniff"
+
+
 @pytest.mark.parametrize("authenticated", [False, True])
 def test_unrelated_cookie_churn_cannot_reset_request_budgets(setup, authenticated):
     cookie = ""

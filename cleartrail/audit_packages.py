@@ -144,7 +144,7 @@ def verify_audit_package(path, expected_manifest_sha256=None):
                     raise ValueError("Unsafe audit package member.")
                 files = _read_members(archive, offset, expected_names=names)
         manifest = strict_json_loads(files["manifest.json"])
-        if not isinstance(manifest, dict) or set(manifest) != {"schema_version", "bundle_format", "generator_version", "files"} or type(manifest["schema_version"]) is not int or manifest["schema_version"] != 1 or manifest["bundle_format"] != FORMAT or manifest["generator_version"] != "0.5.0" or not isinstance(manifest["files"], dict) or set(manifest["files"]) != set(files) - {"manifest.json"}:
+        if not isinstance(manifest, dict) or set(manifest) != {"schema_version", "bundle_format", "generator_version", "files"} or type(manifest["schema_version"]) is not int or manifest["schema_version"] != 1 or manifest["bundle_format"] != FORMAT or manifest["generator_version"] not in {"0.5.0", "0.6.0"} or not isinstance(manifest["files"], dict) or set(manifest["files"]) != set(files) - {"manifest.json"}:
             raise ValueError("Invalid audit manifest.")
         manifest_digest = hashlib.sha256(files["manifest.json"]).hexdigest()
         if expected_manifest_sha256 is not None and manifest_digest != expected_manifest_sha256.lower():

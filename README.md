@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
-[![Version 0.5.0](https://img.shields.io/badge/version-0.5.0-23684a.svg)](cleartrail/__init__.py)
+[![Version 0.6.0](https://img.shields.io/badge/version-0.6.0-23684a.svg)](cleartrail/__init__.py)
 [![Security and regression](https://github.com/AYASKA-in/cleartrail-evidence/actions/workflows/ci.yml/badge.svg)](https://github.com/AYASKA-in/cleartrail-evidence/actions/workflows/ci.yml)
 
 ClearTrail collects selected security settings from **GitHub, Google Workspace
@@ -15,7 +15,7 @@ edition with organization workspaces, OIDC sign-in and independent reviewers.
 The core needs no paid API, AI service or proprietary backend. Evidence stays in
 storage you operate, and exported packages can be verified offline.
 
-> **Release status: controlled staging, version 0.5.0.** Local regression,
+> **Release status: controlled staging, version 0.6.0.** Local regression,
 > browser, scanner and recovery results are documented. Production identity,
 > provider permissions, infrastructure and independent review still require
 > deployment-specific evidence. Read the [release gates](docs/RELEASE_GATES.md)
@@ -72,7 +72,7 @@ sources, observations and limitations.
 
 ## Capabilities
 
-| Area | Available in 0.5.0 |
+| Area | Available in 0.6.0 |
 |---|---|
 | Collection | Read-only GitHub, Google Directory and AWS checks with explicit scope, bounded requests and incomplete-coverage reporting |
 | Local workflow | Standard-library CLI, loopback dashboard, SQLite history and a synthetic demo that contacts no provider accounts |
@@ -80,10 +80,18 @@ sources, observations and limitations.
 | Organizations | Separate workspaces; administrator, operator and auditor roles; active-workspace mutation checks |
 | Monitoring | Opt-in schedules, evidence freshness, durable jobs, missed-run visibility and scoped operational notices |
 | Team evidence | Encrypted text/PDF/modern Office uploads, immutable versions, owners, independent review and expiry |
+| Governance | Versioned risks, applicability decisions, internal audits, management reviews and corrective actions; independent approvals and exact evidence links |
 | Scanning | Private ClamAV integration; fresh scan required for binary uploads; scanner errors and limits block publication |
 | Review packages | Automated snapshots and document-inclusive period packages with exact approved versions, review history and scan records |
 | Integrity | SHA-256 manifests, validated evidence graphs, regenerated views, historical catalogs and offline verification |
 | Operations | Explicit migrations, key rotation, readiness checks, isolated collectors, tenant audit chains and recovery runbooks |
+
+The hosted **Governance** tab adds a customer-authored risk register and
+applicability entries for 93 Annex A reference IDs, alongside audit/review/action
+records. It includes approval histories, review due dates, fixed starter risk
+scores and an offline-verifiable JSON register. Licensed standards text is not
+distributed; entry counts are not a compliance score. Supporting file bytes
+remain in separate document audit packages. See [GOVERNANCE.md](docs/GOVERNANCE.md).
 
 ## Choose a deployment mode
 
@@ -410,18 +418,23 @@ public issues.
 
 ## Validation and release readiness
 
-These are **recorded local 0.5.0 results from 23–24 October 2026**, not a guarantee
+These are **recorded local 0.6.0 results from 24 October 2026**, not a guarantee
 that another deployment or a future dependency scan will match:
 
 | Check | Recorded result |
 |---|---|
-| Windows Python 3.10 with PostgreSQL | 347 passed, 2 POSIX-only skips; 259 subtests passed |
-| Linux Python 3.12 with PostgreSQL | 349 passed, no skips; 259 subtests passed |
-| Real local browser identity | Keycloak code/PKCE, distinct admin/reviewer/auditor, desktop/mobile workflows, restore reauthentication |
-| File acceptance | Fresh ClamAV definitions, clean-file workflow, EICAR detection, scan-limit rejection |
-| Recovery | Killed worker, separate logical restore, audit/key/file/RLS checks, session invalidation; 81.38-second local rehearsal |
-| Release artifacts | Installed-wheel lifecycle, standard-library offline verification and older snapshot compatibility |
-| Dependency/image audits | No known matches in audited runtime lock or final app/scanner images at recorded scan times |
+| Windows Python 3.10 with PostgreSQL | 382 passed, 2 POSIX-only skips; 259 subtests passed |
+| Linux Python 3.12 with PostgreSQL | 384 passed, no skips; 259 subtests passed |
+| Governance security | Independent/stale reviews, tenant/RLS boundaries, quotas, key rotation, dependency withdrawal, forged exports and all five schemas |
+| Real local browser identity | Keycloak code/PKCE and distinct identities; risk/applicability forms, review and register download |
+| Offline verification | Browser-downloaded governance register matched its trusted SHA-256; isolated standard-library verification tested |
+| AWS infrastructure | Local CloudFormation lint passed for Mumbai; no account-level validation or deployment performed |
+| Image audit | Final 0.6 application image: zero known vulnerability matches at the recorded scan time |
+
+Detailed file scanning, document packages and the 81.38-second logical recovery
+rehearsal were exercised in [0.5](docs/VALIDATION_0_5.md). They were not repeated
+as new 0.6 operational recovery measurements. Current regressions retain that
+behavior and historical snapshot/package compatibility.
 
 The recovery fixture accelerated lease expiry; it did not establish production
 RPO/RTO, off-host WAL/PITR or IdP disaster recovery. The internal assessment was
@@ -432,7 +445,7 @@ CI runs a Windows/Linux Python 3.10/3.12 matrix, a PostgreSQL isolation job,
 dependency audits, distribution builds and application/scanner image gates for
 known High/Critical vulnerabilities. The badge links to actual GitHub runs.
 Dated measurements, tool inventories and limits are in
-[VALIDATION.md](docs/VALIDATION.md) and [QA results](docs/qa/results-0.5.json).
+[VALIDATION.md](docs/VALIDATION.md).
 
 ## Development
 
@@ -470,7 +483,7 @@ Priority development areas include:
 
 - GitHub App onboarding and effective Rulesets coverage.
 - Durable Google collector authorization/refresh and wider cloud populations.
-- Risk, remediation, exceptions, personnel/device/vendor and access-review workflows.
+- Richer risk/remediation automation, exceptions, personnel/device/vendor and access-review workflows.
 - Engagement-scoped auditor sharing and evidence effective-date semantics.
 - Retention, legal holds, offboarding and customer deletion/export automation.
 - Continuous re-scanning, storage adapters and approved scanner imports.
@@ -487,8 +500,10 @@ opportunities, not delivered features or delivery promises.
 |---|---|
 | Local credentials, permissions and collection | [SETUP.md](docs/SETUP.md) |
 | Hosted roles, migrations and infrastructure | [HOSTED_DEPLOYMENT.md](docs/HOSTED_DEPLOYMENT.md) |
+| AWS Free Plan credits and Mumbai staging | [AWS_STAGING.md](docs/AWS_STAGING.md) |
 | Google authentication | [GOOGLE_STAGING.md](docs/GOOGLE_STAGING.md) |
 | Ownership, reviews, expiry and quotas | [TEAM_EVIDENCE.md](docs/TEAM_EVIDENCE.md) |
+| Risks, applicability, audits and corrective actions | [GOVERNANCE.md](docs/GOVERNANCE.md) |
 | Scanning policy and definitions | [SCANNING.md](docs/SCANNING.md) |
 | Audit packages and verification | [AUDIT_PACKAGES.md](docs/AUDIT_PACKAGES.md) |
 | Scheduling, freshness and notices | [MONITORING.md](docs/MONITORING.md) |

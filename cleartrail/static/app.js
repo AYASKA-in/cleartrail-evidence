@@ -58,6 +58,11 @@ const views = {
     "Evidence your team can stand behind.",
     "Assign owners, retain each version, and record independent review.",
   ],
+  governance: [
+    "Governance",
+    "Turn decisions into a reviewable record.",
+    "Manage risks, applicability, audits, management reviews and corrective actions.",
+  ],
 };
 let state,
   selected = "all",
@@ -241,6 +246,7 @@ function render() {
   const v = view();
   $("#monitoring-nav").hidden = state.mode !== "hosted";
   $("#documents-nav").hidden = state.mode !== "hosted";
+  $("#governance-nav").hidden = state.mode !== "hosted";
   $("#page-name").textContent = views[v][0];
   $("#heading").textContent = views[v][1];
   $("#subtitle").textContent = views[v][2];
@@ -269,7 +275,8 @@ function render() {
       : "Collecting…"
     : "Collect evidence";
   let content;
-  if (v === "documents") content = documentsView();
+  if (v === "governance") content = governanceView();
+  else if (v === "documents") content = documentsView();
   else if (v === "monitoring") content = monitoringView();
   else if (v === "integrations") content = integrationsView();
   else if (v === "reports") content = reportsView();
@@ -285,6 +292,7 @@ function render() {
         : "");
   $("#content").innerHTML = content;
   if (v === "documents" && state.mode === "hosted") loadDocuments();
+  if (v === "governance" && state.mode === "hosted") loadGovernance();
   if (run) {
     filterRows();
     if (v === "evidence") evidenceRows();
@@ -490,6 +498,7 @@ function showSignIn() {
   $("#health-status").hidden = true;
   $("#monitoring-nav").hidden = true;
   $("#documents-nav").hidden = true;
+  $("#governance-nav").hidden = true;
   $(".top-meta").textContent = "Sign-in required";
   if ($("#detail").open) $("#detail").close();
   $("#workspace-name").textContent = "Sign-in required";
@@ -962,6 +971,350 @@ document.addEventListener("submit", async (event) => {
   }
 });
 let documentLoadSequence = 0;
+let governanceLoadSequence = 0;
+const governanceKinds = {
+  risk: "Risk",
+  applicability: "Applicability decision",
+  internal_audit: "Internal audit",
+  management_review: "Management review",
+  corrective_action: "Corrective action",
+};
+const governanceFields = {
+  risk: {
+    scope: "Scope and assets",
+    scenario: "Risk scenario",
+    likelihood: "Inherent likelihood (1–5)",
+    impact: "Inherent impact (1–5)",
+    treatment: ["Treatment", "mitigate", "accept", "avoid", "transfer"],
+    plan: "Treatment plan and acceptance rationale",
+    residual_likelihood: "Residual likelihood (1–5)",
+    residual_impact: "Residual impact (1–5)",
+    review_date: "Next review due (UTC date)",
+  },
+  applicability: {
+    reference: "Annex A reference",
+    applicability: ["Applicability", "applicable", "not_applicable"],
+    basis: "Inclusion or exclusion rationale",
+    implementation: [
+      "Implementation",
+      "planned",
+      "in_progress",
+      "implemented",
+      "not_applicable",
+    ],
+    description: "Customer control description or exclusion details",
+    review_date: "Next review due (UTC date)",
+  },
+  internal_audit: {
+    scope: "Audit scope",
+    criteria: "Audit criteria and policy references",
+    auditor: "Independent assessor’s exact identity subject",
+    period_start: "Period start",
+    period_end: "Period end",
+    findings: "Findings and supporting sample references",
+    conclusion: "Conclusion",
+    review_date: "Next review due (UTC date)",
+  },
+  management_review: {
+    review_date: "Review meeting date",
+    participants: "Participants",
+    inputs: "Inputs considered (including context changes)",
+    decisions: "Decisions and resources",
+    actions: "Actions, owners and due dates",
+    next_review_date: "Next review due (UTC date)",
+  },
+  corrective_action: {
+    finding: "Finding and source",
+    cause: "Root cause",
+    action: "Corrective action and responsible parties",
+    due_date: "Action due date",
+    state: ["Action status", "open", "in_progress", "completed"],
+    verification: "Effectiveness verification or verification plan",
+    review_date: "Next review due (UTC date)",
+  },
+};
+
+function governanceView() {
+  if (state.mode !== "hosted")
+    return '<section class="panel"><h2>Governance</h2><p>Governance records require a hosted organization workspace.</p></section>';
+  return `<section class="panel governance"><div class="section-title"><div><h2>Your governance register</h2><p>Each edit creates an encrypted version. An independent administrator or operator reviews that exact version.</p></div><div class="document-actions"><button class="button secondary" data-governance-refresh>Refresh</button><button class="button secondary" data-governance-export>Export register</button>${state.role !== "auditor" ? '<button class="button primary" data-governance-new>Create record</button>' : ""}</div></div><p class="small">Track the 93 Annex A reference identifiers with your own applicability rationale. Entries and approvals do not measure framework compliance. Risk scoring is ClearTrail’s fixed starter 1–5 likelihood × impact convention; it is not an ISO scoring requirement. Review dates use UTC.</p><p class="small">The register export contains approved records and review history. Export supporting files separately with a document audit package. Licensed standards text is not included.</p><div id="governance-export-result" role="status"></div></section><div id="governance-register" class="section-space governance" aria-live="polite"><p>Loading governance records…</p></div>`;
+}
+
+async function loadGovernance() {
+  const workspace = state.workspace_id,
+    sequence = ++governanceLoadSequence;
+  try {
+    const data = await documentGet("/api/governance", workspace);
+    if (!$("#governance-register") || sequence !== governanceLoadSequence)
+      return;
+    const decisions = data.records.filter((r) => r.kind === "applicability");
+    $("#governance-register").innerHTML =
+      `<p class="small">${data.records.length} / ${data.limits.records} records · ${decisions.length} / ${data.reference_count} applicability entries${state.role === "auditor" ? " with approved current versions" : " recorded"} · ${data.records.filter((r) => r.overdue).length} reviews overdue</p><div class="table-panel"><div class="table-scroll"><table><thead><tr><th scope="col">RECORD</th><th scope="col">TYPE / REFERENCE</th><th scope="col">OWNER</th><th scope="col">STATUS</th><th scope="col">RISK / REVIEW</th></tr></thead><tbody>${data.records.map((r) => `<tr><td><button class="control-title" data-governance-open="${esc(r.record_id)}">${esc(r.title)}</button><span class="small">Version ${r.number}</span></td><td>${esc(governanceKinds[r.kind])}${r.reference ? `<br>${esc(r.reference)}` : ""}</td><td class="document-subject">${esc(r.owner)}</td><td>${documentStatus(r.status)}</td><td>${r.risk_scores ? `Residual ${r.risk_scores.residual.score} · ${esc(r.risk_scores.residual.band)}<br>` : ""}${r.overdue ? "Review overdue" : "Review due"}: ${esc(r.payload.data.next_review_date || r.payload.data.review_date)}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-cell">No records available. Start with a scoped risk assessment and applicability decisions.</td></tr>'}</tbody></table></div></div>`;
+  } catch (error) {
+    if ($("#governance-register") && sequence === governanceLoadSequence)
+      $("#governance-register").textContent = error.message;
+  }
+}
+
+function governanceField(key, spec, value, options) {
+  const label = Array.isArray(spec) ? spec[0] : spec;
+  let input;
+  if (key === "reference" || Array.isArray(spec)) {
+    const choices =
+      key === "reference" ? options.annex_references : spec.slice(1);
+    input = `<select name="${key}" id="gov-${key}" required>${choices.map((v) => `<option value="${esc(v)}"${v === value ? " selected" : ""}>${esc(v.replaceAll("_", " "))}</option>`).join("")}</select>`;
+  } else if (key.includes("likelihood") || key.includes("impact")) {
+    input = `<input name="${key}" id="gov-${key}" type="number" min="1" max="5" step="1" value="${esc(value ?? 1)}" required>`;
+  } else if (key.includes("date") || key.startsWith("period_")) {
+    input = `<input name="${key}" id="gov-${key}" type="date" value="${esc(value || "")}" required>`;
+  } else if (key === "auditor") {
+    input = `<input name="${key}" id="gov-${key}" maxlength="255" value="${esc(value || "")}" required><small>Use an existing workspace member’s exact identity subject, different from the responsible owner.</small>`;
+  } else {
+    input = `<textarea name="${key}" id="gov-${key}" maxlength="3000" required>${esc(value || "")}</textarea>`;
+  }
+  return `<div class="field"><label for="gov-${key}">${esc(label)}</label>${input}</div>`;
+}
+
+async function governanceForm(item = null) {
+  const workspace = state.workspace_id;
+  const options = await documentGet("/api/governance/options", workspace);
+  const kind = item?.kind || "risk";
+  showDialog(
+    item ? "Create next governance version" : "Create governance record",
+    `<form id="governance-form" class="governance"><div class="field"><label for="gov-kind">Record type</label><select id="gov-kind" name="kind"${item ? " disabled" : ""}>${Object.entries(
+      governanceKinds,
+    )
+      .map(
+        ([v, label]) =>
+          `<option value="${v}"${v === kind ? " selected" : ""}>${esc(label)}</option>`,
+      )
+      .join(
+        "",
+      )}</select></div><div class="field"><label for="gov-title">Record title</label><input id="gov-title" name="title" maxlength="160" value="${esc(item?.title || "")}" required></div><div class="field"><label for="gov-owner">Responsible owner</label><select id="gov-owner" name="owner">${options.owners.map((v) => `<option value="${esc(v)}"${v === (item?.owner || state.subject) ? " selected" : ""}>${esc(v)}</option>`).join("")}</select></div><div id="governance-fields"></div><p class="small">All fields are required. Use a reasoned “none identified” where appropriate. Implemented applicability decisions and completed actions need at least one approved supporting file before approval. Keep credentials out of records.</p><fieldset class="document-controls"><legend>Exact supporting evidence versions (up to 10)</legend>${options.evidence.map((v) => `<label><input type="checkbox" name="evidence" value="${esc(v.id)}"${item?.payload.evidence_version_ids.includes(v.id) ? " checked" : ""}><span>${esc(v.title)} · v${v.number} · ${esc(v.filename)}</span></label>`).join("") || '<p class="small">No approved files available. Upload and independently review evidence first.</p>'}${(
+      item?.payload.evidence_version_ids || []
+    )
+      .filter((id) => !options.evidence.some((v) => v.id === id))
+      .map(
+        (id) =>
+          `<label><input type="checkbox" name="evidence" value="${esc(id)}" checked><span>Previously linked version ${esc(id)} (currently unavailable; remove or restore its approval)</span></label>`,
+      )
+      .join(
+        "",
+      )}</fieldset><fieldset class="document-controls"><legend>Related approved governance versions (up to 10)</legend><div id="governance-related"></div></fieldset><p class="form-error" role="alert"></p><button class="button primary" type="submit">Save pending version</button></form>`,
+    "GOVERNANCE / VERSIONED RECORD",
+  );
+  const form = $("#governance-form");
+  const fields = () => {
+    const selectedKind = $("#gov-kind").value;
+    $("#governance-fields").innerHTML = Object.entries(
+      governanceFields[selectedKind],
+    )
+      .map(([key, spec]) =>
+        governanceField(key, spec, item?.payload.data[key], options),
+      )
+      .join("");
+    if (item?.kind === "applicability") $("#gov-reference").disabled = true;
+    if (selectedKind === "applicability") {
+      const syncImplementation = () => {
+        const control = $("#gov-implementation"),
+          previous = control.value;
+        const choices =
+          $("#gov-applicability").value === "not_applicable"
+            ? ["not_applicable"]
+            : ["planned", "in_progress", "implemented"];
+        control.innerHTML = choices
+          .map(
+            (v) =>
+              `<option value="${v}"${v === previous ? " selected" : ""}>${esc(v.replaceAll("_", " "))}</option>`,
+          )
+          .join("");
+      };
+      $("#gov-applicability").addEventListener("change", syncImplementation);
+      syncImplementation();
+    }
+    const related = options.related.filter(
+      (v) =>
+        (!item || v.id !== item.id) &&
+        (selectedKind !== "applicability" || v.kind === "risk"),
+    );
+    $("#governance-related").innerHTML =
+      related
+        .map(
+          (v) =>
+            `<label><input type="checkbox" name="related" value="${esc(v.id)}"${item?.payload.related_version_ids.includes(v.id) ? " checked" : ""}><span>${esc(v.title)} · ${esc(governanceKinds[v.kind])} · v${v.number}</span></label>`,
+        )
+        .join("") +
+      (item?.payload.related_version_ids || [])
+        .filter((id) => !related.some((v) => v.id === id))
+        .map(
+          (id) =>
+            `<label><input type="checkbox" name="related" value="${esc(id)}" checked><span>Previously linked version ${esc(id)} (approval rechecked on review)</span></label>`,
+        )
+        .join("");
+  };
+  $("#gov-kind").addEventListener("change", fields);
+  fields();
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    try {
+      const values = new FormData(form),
+        selectedKind = $("#gov-kind").value,
+        data = {};
+      for (const key of Object.keys(governanceFields[selectedKind])) {
+        data[key] =
+          key === "reference" && item
+            ? item.reference
+            : key.includes("likelihood") || key.includes("impact")
+              ? Number(values.get(key))
+              : values.get(key);
+      }
+      await request(
+        "/api/governance/save",
+        {
+          record_id: item?.record_id || null,
+          kind: selectedKind,
+          title: values.get("title"),
+          owner: values.get("owner"),
+          expected_revision: item?.number || null,
+          payload: {
+            data,
+            evidence_version_ids: values.getAll("evidence"),
+            related_version_ids: values.getAll("related"),
+          },
+        },
+        workspace,
+      );
+      if (workspace !== state.workspace_id) return;
+      $("#detail").close();
+      await loadGovernance();
+      toast("Pending governance version saved.");
+    } catch (error) {
+      form.querySelector('[role="alert"]').textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
+async function governanceDetail(id) {
+  const workspace = state.workspace_id,
+    item = await documentGet(
+      "/api/governance/" + encodeURIComponent(id),
+      workspace,
+    );
+  const head = item.versions[0],
+    writer = state.role !== "auditor";
+  showDialog(
+    head.title,
+    `<div class="governance"><p>${esc(governanceKinds[head.kind])} · Owner: <span class="document-subject">${esc(head.owner)}</span></p>${writer ? '<button class="button secondary" id="governance-edit">Create next version</button>' : ""}${item.versions
+      .map(
+        (v) =>
+          `<section class="document-version"><h3>Version ${v.number} · ${documentStatus(v.status)}</h3><p class="small">${documentDate(v.created_at)} · ${esc(v.created_by)}<br>Version ID: <span class="mono">${esc(v.id)}</span></p><dl class="governance-details">${Object.keys(
+            governanceFields[v.kind],
+          )
+            .map(
+              (key) =>
+                `<dt>${esc(Array.isArray(governanceFields[v.kind][key]) ? governanceFields[v.kind][key][0] : governanceFields[v.kind][key])}</dt><dd>${esc(v.payload.data[key])}</dd>`,
+            )
+            .join(
+              "",
+            )}</dl>${v.risk_scores ? `<p>Inherent score: ${v.risk_scores.inherent.score} (${esc(v.risk_scores.inherent.band)}) · Residual: ${v.risk_scores.residual.score} (${esc(v.risk_scores.residual.band)})</p>` : ""}<p class="small">Supporting files: ${v.payload.evidence_version_ids.map((ref) => `<a href="/api/documents/versions/${encodeURIComponent(ref)}/download">${esc(ref)}</a>`).join(", ") || "None"}<br>Related governance version IDs: ${v.payload.related_version_ids.map(esc).join(", ") || "None"}</p><p class="mono document-hash">Payload SHA-256 ${esc(v.sha256)}</p><ol class="document-reviews">${v.reviews.map((r) => `<li><strong>${esc(r.decision)}</strong> · ${esc(r.reviewer)} · ${documentDate(r.created_at)}<p>${esc(r.comment)}</p></li>`).join("") || "<li>Pending independent review.</li>"}</ol>${writer && ((v.number === item.revision && ![v.owner, v.created_by, head.owner].includes(state.subject)) || v.status === "approved") ? `<form class="governance-review" data-version="${esc(v.id)}"><div class="field"><label for="gov-decision-${esc(v.id)}">Review decision for version ${v.number}</label><select id="gov-decision-${esc(v.id)}" name="decision">${v.number === item.revision && ![v.owner, v.created_by, head.owner].includes(state.subject) ? '<option value="approved">Approve</option><option value="rejected">Reject</option>' : ""}<option value="withdrawn">Withdraw approval</option></select></div><div class="field"><label for="gov-comment-${esc(v.id)}">Review rationale</label><textarea id="gov-comment-${esc(v.id)}" name="comment" maxlength="2000" required></textarea></div><p class="form-error" role="alert"></p><button type="submit" class="button primary">Record review</button></form>` : ""}</section>`,
+      )
+      .join(
+        "",
+      )}<p class="small">Review linked evidence and the exact data above before approving. Approval records a customer decision; it does not establish certification or independent assurance.</p></div>`,
+    "GOVERNANCE / REVIEW HISTORY",
+  );
+  if (writer)
+    $("#governance-edit").onclick = () =>
+      governanceForm(head).catch((e) => toast(e.message, true));
+  document.querySelectorAll(".governance-review").forEach((form) =>
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = form.querySelector('[type="submit"]');
+      button.disabled = true;
+      try {
+        const version = item.versions.find(
+            (v) => v.id === form.dataset.version,
+          ),
+          values = new FormData(form);
+        await request(
+          "/api/governance/review",
+          {
+            version_id: version.id,
+            decision: values.get("decision"),
+            comment: values.get("comment"),
+            expected_review_id: version.reviews.at(-1)?.id || null,
+          },
+          workspace,
+        );
+        if (workspace !== state.workspace_id) return;
+        await governanceDetail(id);
+        await loadGovernance();
+        toast("Governance review recorded.");
+      } catch (error) {
+        form.querySelector('[role="alert"]').textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    }),
+  );
+}
+
+async function governanceExport(button) {
+  const workspace = state.workspace_id;
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/governance/export", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-ClearTrail-Token": state.csrf,
+        "X-ClearTrail-Workspace": workspace,
+      },
+      body: "{}",
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(
+        data.error ||
+          "Export failed. Check approved records and linked evidence.",
+      );
+    }
+    const blob = await response.blob();
+    if (workspace !== state.workspace_id || !$("#governance-export-result"))
+      return;
+    const url = URL.createObjectURL(blob),
+      link = document.createElement("a");
+    link.href = url;
+    link.download = "cleartrail-governance-register.json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    $("#governance-export-result").innerHTML =
+      `<p>Register downloaded. Retain this SHA-256 through a trusted channel:</p><p class="mono document-hash">${esc(response.headers.get("X-ClearTrail-SHA256"))}</p><p class="small"><code>python -m cleartrail verify-governance cleartrail-governance-register.json --expected-sha256 &lt;trusted hash&gt;</code></p>`;
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+document.addEventListener("click", (event) => {
+  const open = event.target.closest("[data-governance-open]"),
+    exportButton = event.target.closest("[data-governance-export]");
+  if (event.target.closest("[data-governance-new]"))
+    governanceForm().catch((e) => toast(e.message, true));
+  if (event.target.closest("[data-governance-refresh]")) loadGovernance();
+  if (open)
+    governanceDetail(open.dataset.governanceOpen).catch((e) =>
+      toast(e.message, true),
+    );
+  if (exportButton) governanceExport(exportButton);
+});
 const documentDate = (seconds) =>
   seconds ? date(new Date(seconds * 1000).toISOString()) : "No expiry";
 const documentStatus = (status) =>
