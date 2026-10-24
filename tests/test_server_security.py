@@ -260,7 +260,9 @@ class LocalServerSecurityTests(unittest.TestCase):
                 try:
                     sock.sendall(f"GET /api/health HTTP/1.1\r\nHost: 127.0.0.1:{self.server.server_port}\r\n\r\n".encode())
                     self.assertEqual(sock.recv(100), b"")
-                except ConnectionResetError:
+                except (ConnectionResetError, ConnectionAbortedError):
+                    # Windows may report a deliberately closed saturated socket
+                    # as WSAECONNABORTED (10053) rather than ECONNRESET or EOF.
                     pass
         finally:
             for _ in range(MAX_REQUEST_THREADS):

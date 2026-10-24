@@ -30,6 +30,11 @@ installed 0.5 wheel and the 81.38-second logical recovery rehearsal are recorded
 in [VALIDATION_0_5.md](VALIDATION_0_5.md); they are not new 0.6 operational recovery
 measurements. Current regressions retain those behaviors. The current wheel/source distribution built successfully. An isolated installation of the wheel verified the browser register without hosted dependencies.
 
+Remote Windows Python 3.10 reported `WSAECONNABORTED` (10053) for a deliberately
+closed socket in the existing saturated-worker test. The fixture now accepts
+that equivalent close result alongside reset/EOF and still requires a healthy
+response after releasing the slots. Its focused local regression passed.
+
 Screenshots: [desktop](qa/governance-desktop-0.6.png),
 [mobile](qa/governance-mobile-0.6.png). Image inventory:
 [application-image-0.6.json](security/application-image-0.6.json) and [scanner-image-1.5.4-r2.json](security/scanner-image-1.5.4-r2.json).
