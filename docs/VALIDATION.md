@@ -1,5 +1,8 @@
 # Validation of 0.6.0
 
+These measurements cover the governance baseline before the workspace UI update.
+See [UI_UX_REVIEW.md](UI_UX_REVIEW.md) for that update and its separate test evidence.
+
 Checked 24 October 2026 with synthetic fixtures. No public AWS deployment,
 customer credentials or real Google sign-in was used.
 

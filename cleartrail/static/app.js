@@ -67,11 +67,136 @@ const views = {
 let state,
   selected = "all",
   query = "",
+  evidenceQuery = "",
   provider = "all",
   framework = "all",
   lastRunning = false,
   toastTimer,
-  loading = false;
+  loading = false,
+  contextSwitching = false,
+  refreshGeneration = 0,
+  refreshAbort = null;
+let governanceLibrary = null,
+  dialogDirty = false,
+  dialogOpener = null,
+  dialogLastField = null;
+const idleButtonLabels = new WeakMap();
+function setButtonBusy(button, busy) {
+  if (busy && !idleButtonLabels.has(button)) {
+    const error = button.closest("form")?.querySelector('[role="alert"]');
+    if (error) error.textContent = "";
+    idleButtonLabels.set(button, button.innerHTML);
+    button.textContent =
+      button.hasAttribute("data-governance-export") ||
+      button.closest("#audit-package-form")
+        ? "Preparing export…"
+        : button.closest("#document-upload-form")
+          ? "Checking and saving…"
+          : "Saving…";
+  } else if (!busy && idleButtonLabels.has(button)) {
+    button.innerHTML = idleButtonLabels.get(button);
+    idleButtonLabels.delete(button);
+  }
+  button.toggleAttribute("disabled", busy);
+  button.setAttribute("aria-busy", String(busy));
+}
+const libraryFilters = {
+  documents: { query: "", status: "all" },
+  governance: { query: "", kind: "all", status: "all" },
+};
+function resetLibraryContext() {
+  documentLibrary = null;
+  governanceLibrary = null;
+  libraryFilters.documents = { query: "", status: "all" };
+  libraryFilters.governance = { query: "", kind: "all", status: "all" };
+  evidenceQuery = "";
+}
+function setMenu(open) {
+  $("#workspace-nav").classList.toggle("is-open", open);
+  $("#menu-toggle").setAttribute("aria-expanded", String(open));
+}
+function announce(message) {
+  $("#announcer").textContent = message;
+}
+function closeDialogSafely() {
+  if (dialogDirty) {
+    $("#discard-panel").hidden = false;
+    $("#keep-editing").focus();
+  } else $("#detail").close();
+}
+$(".skip").addEventListener("click", (event) => {
+  event.preventDefault();
+  $("#main").focus();
+  $("#main").scrollIntoView({ block: "start" });
+});
+$("#workspace-nav").addEventListener("click", (event) => {
+  const link = event.target.closest("a");
+  if (link) {
+    setMenu(false);
+    if (link.hash === location.hash) $("#main").focus();
+  }
+});
+$("#menu-toggle").addEventListener("click", () =>
+  setMenu($("#menu-toggle").getAttribute("aria-expanded") !== "true"),
+);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !$("#detail").open) {
+    const wasOpen = $("#menu-toggle").getAttribute("aria-expanded") === "true";
+    setMenu(false);
+    if (wasOpen) $("#menu-toggle").focus();
+  }
+});
+$("#detail").addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeDialogSafely();
+});
+$("#keep-editing").addEventListener("click", () => {
+  $("#discard-panel").hidden = true;
+  if (dialogLastField?.isConnected) dialogLastField.focus();
+  else $("#dialog-body").querySelector("textarea,input,select,button")?.focus();
+});
+$("#discard-changes").addEventListener("click", () => $("#detail").close());
+$("#detail").addEventListener("close", () => {
+  dialogDirty = false;
+  $("#discard-panel").hidden = true;
+  dialogLastField = null;
+  if (dialogOpener?.isConnected && !dialogOpener.disabled) dialogOpener.focus();
+  else $("#main").focus();
+});
+for (const name of ["input", "change"])
+  document.addEventListener(name, (event) => {
+    const form = event.target.closest("form");
+    if (form?.closest("#detail")) dialogDirty = true;
+    if (form?.closest("#content")) form.dataset.unsaved = "true";
+    if (form?.closest("#detail")) updateSelectionCounts(form);
+  });
+document.addEventListener("focusin", (event) => {
+  if (
+    event.target.matches("input,textarea,select") &&
+    event.target.closest("#detail")
+  )
+    dialogLastField = event.target;
+});
+function updateSelectionCounts(form) {
+  form.querySelectorAll("fieldset").forEach((fieldset) => {
+    const legend = fieldset.querySelector("legend");
+    if (!legend || !fieldset.querySelector('input[type="checkbox"]')) return;
+    let counter = legend.querySelector(".selection-count");
+    if (!counter) {
+      counter = document.createElement("span");
+      counter.className = "selection-count";
+      counter.setAttribute("role", "status");
+      legend.append(counter);
+    }
+    counter.textContent = `${fieldset.querySelectorAll('input[type="checkbox"]:checked').length} selected`;
+  });
+}
+window.addEventListener("beforeunload", (event) => {
+  if (dialogDirty || $("#content form[data-unsaved]")) {
+    event.preventDefault();
+    event.returnValue = "";
+  }
+});
 const view = () =>
   location.hash.slice(1) in views ? location.hash.slice(1) : "overview";
 const mark = (p) =>
@@ -103,7 +228,13 @@ async function request(path, body, workspace = state?.workspace_id) {
     body: JSON.stringify(body),
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Request failed.");
+  if (!response.ok)
+    throw new Error(ClearTrailUI.errorMessage(response.status, data.error));
+  if (workspace !== state?.workspace_id && path !== "/api/workspace")
+    throw new Error(
+      "Workspace changed. Reopen the record in your current workspace.",
+    );
+  dialogDirty = false;
   return data;
 }
 function integrationState(p) {
@@ -142,6 +273,11 @@ function integrationState(p) {
 function integrationMini(p) {
   const info = integrationState(p);
   return `<div class="integration-mini">${mark(p)}<div><strong>${names[p]}</strong><small>${esc(info.description)}</small></div><span class="connection-status ${info.active ? "" : "idle"}"><i class="dot"></i>${info.label}</span></div>`;
+}
+function firstRunView() {
+  const auditor = state.role === "auditor",
+    hosted = state.mode === "hosted";
+  return `<section class="panel welcome-panel"><span class="eyebrow">${auditor ? "REVIEW WORKSPACE" : "GET STARTED"}</span><h2>${auditor ? "Your evidence will appear here." : "Build your first evidence trail."}</h2><p>${auditor ? "Approved team records are available in their libraries. Automated results appear after your team collects a snapshot." : "Start with the evidence you already have, then connect a source and collect a snapshot. Missing access remains unknown."}</p><div class="onboarding-grid"><a class="onboarding-step" href="#integrations"><span class="step-number">1</span><h3>${auditor ? "View collection scope" : "Configure a source"}</h3><p>${state.role === "operator" ? "Your administrator manages provider credentials and scope." : "Review the read-only GitHub, Google Workspace and AWS setup."}</p>${icon("arrow")}</a>${hosted ? `<a class="onboarding-step" href="#documents"><span class="step-number">2</span><h3>${auditor ? "Review approved files" : "Add team evidence"}</h3><p>Policies, access reviews and other documents, with independent approval.</p>${icon("arrow")}</a><a class="onboarding-step" href="#governance"><span class="step-number">3</span><h3>${auditor ? "Review governance" : "Record your decisions"}</h3><p>Risks, applicability and follow-up actions in one reviewable register.</p>${icon("arrow")}</a>` : `<div class="onboarding-step"><span class="step-number">2</span><h3>Collect a snapshot</h3><p>Use Collect evidence after configuration. Export the result from Reports.</p></div>`}</div></section>`;
 }
 function stats() {
   const s = state.run.summary;
@@ -195,7 +331,7 @@ function filterRows() {
               )
               .join(
                 "",
-              )}</td><td><button class="evidence-button" data-control="${c.id}">${icon(c.provider === "manual" ? "file" : "folder")}${c.resource_count ? `${c.resource_count} record${c.resource_count === 1 ? "" : "s"}` : c.provider === "manual" ? "Add note" : "No records"}${icon("arrow")}</button></td></tr>`,
+              )}</td><td><button class="evidence-button" data-control="${c.id}">${icon(c.provider === "manual" ? "file" : "folder")}${c.resource_count ? `${c.resource_count} record${c.resource_count === 1 ? "" : "s"}` : c.provider === "manual" ? (state.role === "auditor" ? "View note" : "Review note") : "No records"}${icon("arrow")}</button></td></tr>`,
         )
         .join("")
     : '<tr><td colspan="5" class="empty-cell">No controls match these filters. Try another search or source.</td></tr>';
@@ -204,9 +340,9 @@ function filterRows() {
 }
 function evidenceView() {
   const records = state.run.evidence;
-  return `<div class="section-title"><div><h2>Collected evidence</h2><p>Captured ${date(state.run.collected_at)} · ${records.length} records</p></div><a class="text-button" href="/api/csv">Download control index ${icon("download")}</a></div><div class="table-panel"><div class="table-toolbar"><label class="search">${icon("search")}<input id="evidence-search" aria-label="Search evidence" placeholder="Find evidence…"></label><span class="small muted">SHA-256 integrity hashes</span></div><div class="table-scroll"><table><thead><tr><th scope="col">RESOURCE / CONTROL</th><th scope="col">SOURCE</th><th scope="col">RESULT</th><th scope="col">COLLECTED</th><th scope="col">RECORD</th></tr></thead><tbody id="evidence-rows"></tbody></table></div><div class="table-bottom"><span>${records.length} point-in-time records</span><span>${state.demo ? "Synthetic demonstration" : state.mode === "hosted" ? "Organization evidence storage" : "Local evidence storage"}</span></div></div>`;
+  return `<div class="section-title"><div><h2>Collected evidence</h2><p>Captured ${date(state.run.collected_at)} · ${records.length} records</p></div><a class="text-button" href="/api/csv">Download control index ${icon("download")}</a></div><div class="table-panel"><div class="table-toolbar"><label class="search">${icon("search")}<input id="evidence-search" aria-label="Search evidence" placeholder="Find evidence…" value="${esc(evidenceQuery)}"></label><span class="small muted">SHA-256 integrity hashes</span></div><div class="table-scroll"><table><thead><tr><th scope="col">RESOURCE / CONTROL</th><th scope="col">SOURCE</th><th scope="col">RESULT</th><th scope="col">COLLECTED</th><th scope="col">RECORD</th></tr></thead><tbody id="evidence-rows"></tbody></table></div><div class="table-bottom"><span>${records.length} point-in-time records</span><span>${state.demo ? "Synthetic demonstration" : state.mode === "hosted" ? "Organization evidence storage" : "Local evidence storage"}</span></div></div>`;
 }
-function evidenceRows(q = "") {
+function evidenceRows(q = evidenceQuery) {
   const records = state.run.evidence.filter((e) =>
     `${e.resource} ${e.control_id} ${e.id}`
       .toLowerCase()
@@ -232,15 +368,17 @@ function integrationsView() {
   return `<div class="integration-grid">${Object.keys(descriptions)
     .map((p) => {
       const info = integrationState(p);
-      return `<section class="integration-card">${mark(p)}<h2>${names[p]}</h2><p>${descriptions[p]}</p><span class="tag ${info.active ? "pass" : "unknown"}"><i class="dot"></i>${info.label}</span><button class="button secondary" data-setup="${p}">Setup instructions ${icon("arrow")}</button></section>`;
+      return `<section class="integration-card">${mark(p)}<h2>${names[p]}</h2><p>${descriptions[p]}</p><span class="tag ${info.active ? "pass" : "unknown"}"><i class="dot"></i>${info.label}</span><button class="button secondary" data-setup="${p}">${state.mode === "hosted" ? (state.role === "admin" ? "Configure integration" : "View scope") : "Setup instructions"} ${icon("arrow")}</button></section>`;
     })
     .join(
       "",
     )}</div><div class="bottom-callout">${icon("lock")}<div><h3>Credentials stay out of your reports.</h3><p>Use environment variables or your AWS credential chain. Setup happens on your machine.</p></div></div><section class="panel section-space"><h2>Collection boundaries</h2><p class="small">Only configured sources are collected. Missing access and unsupported settings are recorded as unknown. The current release checks classic GitHub branch protection and one configured AWS region. Google access tokens must be refreshed by your own identity workflow.</p></section>`;
 }
 function reportsView() {
-  return `<section class="report-callout">${icon("file")}<div><h2>Ready for a closer look.</h2><p>A printable HTML report, control index, JSON source records, and a SHA-256 manifest — packaged together for your reviewer.</p><span class="small muted">${state.run ? date(state.run.collected_at) : "Collect evidence to create a package"} · ${state.demo ? "Synthetic demo" : "Point-in-time snapshot"}</span></div>${state.run ? `<a class="button primary" href="/api/export">${icon("download")}Download package</a>` : ""}</section>${state.mode === "hosted" ? '<section class="panel"><p class="small">Snapshot packages contain automated evidence and manual notes. Create an audit package to include selected approved team files, scan records and review history. <button class="button secondary" data-audit-package>Create audit package</button></p></section>' : ""}<section class="panel"><h2>Know what the report proves</h2><p class="small">These checks support evidence review. They do not cover the full framework, establish that controls operated throughout an audit period, or guarantee auditor acceptance. File hashes detect changes against a trusted manifest; the manifest is unsigned.</p><pre>python -m cleartrail verify path/to/cleartrail-package.zip</pre>${state.run ? '<a class="text-button" href="/api/report" target="_blank" rel="noopener">Open printable report ' + icon("arrow") + "</a>" : ""}</section><div class="section-title section-space"><div><h2>Collection history</h2><p>The latest 20 snapshots retained in this workspace.</p></div></div><div class="table-panel"><div class="table-scroll"><table><thead><tr><th scope="col">COLLECTED</th><th scope="col">SNAPSHOT</th><th scope="col">PASSING</th><th scope="col">EVIDENCE</th><th scope="col">MODE</th></tr></thead><tbody>${state.history.map((r) => `<tr><td>${date(r.collected_at)}</td><td class="mono"><a href="/api/export?run_id=${encodeURIComponent(r.id)}">${esc(r.id)}</a></td><td>${r.summary.passed} / ${r.summary.total}</td><td>${r.summary.evidence_count} records</td><td>${r.demo ? "Demo" : "Live"}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-cell">No snapshots collected yet.</td></tr>'}</tbody></table></div></div>`;
+  const snapshot = state.run;
+  return `<div class="section-title"><div><h2>Choose what to share</h2><p>Each export serves a different review. Retain its digest through a trusted channel.</p></div></div><div class="export-grid"><section class="panel export-card">${icon("shield")}<h2>Configuration snapshot</h2><p>Collected settings, source records, HTML report and control index.</p><span class="small">${snapshot ? date(snapshot.collected_at) : "Collect a snapshot to enable this export."}</span>${snapshot ? `<a class="button primary" href="/api/export?run_id=${encodeURIComponent(snapshot.id)}">${icon("download")}Download snapshot</a>` : '<a class="button secondary" href="#integrations">Review integrations</a>'}</section>${state.mode === "hosted" ? `<section class="panel export-card">${icon("folder")}<h2>Document audit package</h2><p>Select exact approved files, their reviews and scan records, with a declared audit period.</p><span class="small">An automated snapshot is optional.</span><button class="button primary" data-audit-package>Create audit package</button></section><section class="panel export-card">${icon("file")}<h2>Governance register</h2><p>Approved decisions, review histories and the governance versions they depend on.</p><span class="small">JSON register. Supporting file bytes are separate.</span><button class="button secondary" data-governance-export>Export register</button></section>` : ""}</div><div id="governance-export-result" class="export-result" role="status"></div><details class="panel section-space"><summary>What these exports prove</summary><p>Evidence supports human review. It does not establish certification, full-period operating effectiveness or auditor acceptance. Exports are unsigned; retain a trusted digest separately.</p><p class="small">Snapshot: <code>python -m cleartrail verify snapshot.zip</code><br>Files: <code>python -m cleartrail verify-audit audit-package.zip --manifest-sha256 TRUSTED_HASH</code><br>Governance: <code>python -m cleartrail verify-governance register.json --expected-sha256 TRUSTED_HASH</code></p></details><div class="section-title section-space"><div><h2>Collection history</h2><p>Latest 20 snapshots in this workspace.</p></div></div><div class="table-panel"><div class="table-scroll" tabindex="0" role="region" aria-label="Collection history"><table><thead><tr><th scope="col">Collected</th><th scope="col">Snapshot</th><th scope="col">Passing</th><th scope="col">Evidence</th><th scope="col">Mode</th></tr></thead><tbody>${state.history.map((r) => `<tr><td>${date(r.collected_at)}</td><td class="mono"><a href="/api/export?run_id=${encodeURIComponent(r.id)}">${esc(r.id)}</a></td><td>${r.summary.passed} / ${r.summary.total}</td><td>${r.summary.evidence_count} records</td><td>${r.demo ? "Demo" : "Live"}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-cell">No snapshots yet. Approved documents and governance can be exported independently.</td></tr>'}</tbody></table></div></div>`;
 }
+
 function render() {
   if (!state) return;
   const v = view();
@@ -248,6 +386,7 @@ function render() {
   $("#documents-nav").hidden = state.mode !== "hosted";
   $("#governance-nav").hidden = state.mode !== "hosted";
   $("#page-name").textContent = views[v][0];
+  $("#mobile-page-name").textContent = views[v][0];
   $("#heading").textContent = views[v][1];
   $("#subtitle").textContent = views[v][2];
   $("#workspace-name").textContent = state.config.organization;
@@ -268,6 +407,8 @@ function render() {
     icon("clock") +
     `<span>${run ? "Last collection: " + date(run.collected_at) : "No collection yet"}${run && Date.now() - new Date(run.collected_at).getTime() > 86400000 ? " · Over 24 hours old" : ""}</span>`;
   $("#export").hidden = !run;
+  if (run)
+    $("#export").href = "/api/export?run_id=" + encodeURIComponent(run.id);
   $("#collect").disabled = state.job.running || state.role === "auditor";
   $("#collect span").textContent = state.job.running
     ? state.job.status === "queued"
@@ -280,17 +421,22 @@ function render() {
   else if (v === "monitoring") content = monitoringView();
   else if (v === "integrations") content = integrationsView();
   else if (v === "reports") content = reportsView();
-  else if (!run)
-    content = `<section class="panel empty">${icon("folder")}<h2>Your evidence trail starts here.</h2><p>Configure a read-only integration, then collect your first snapshot. Unconfigured controls will stay unknown.</p><a class="button primary" href="#integrations">Set up integrations ${icon("arrow")}</a><p class="small">To explore with synthetic data: <code>python -m cleartrail serve --demo</code></p></section>`;
+  else if (!run) content = firstRunView();
   else if (v === "evidence") content = evidenceView();
   else
     content =
       (v === "overview" ? stats() + overviewPanels() : "") +
       controlsTable() +
       (v === "overview"
-        ? `<div class="bottom-callout">${icon("file")}<div><h3>A little documentation goes a long way.</h3><p>Add an owner and review notes for the work that happens beyond the API.</p></div><button class="text-button" data-control="MAN-POLICY">Add team evidence ${icon("arrow")}</button></div>`
+        ? `<div class="bottom-callout">${icon("file")}<div><h3>Keep the human work reviewable.</h3><p>Policies, access reviews and incident exercises need supporting evidence.</p></div><button class="text-button" data-control="MAN-POLICY">${state.role === "auditor" ? "View policy evidence" : "Review team evidence"} ${icon("arrow")}</button></div>`
         : "");
   $("#content").innerHTML = content;
+  document.querySelectorAll(".table-scroll").forEach((region) => {
+    region.tabIndex = 0;
+    region.setAttribute("role", "region");
+    if (!region.hasAttribute("aria-label"))
+      region.setAttribute("aria-label", views[v][0] + " table");
+  });
   if (v === "documents" && state.mode === "hosted") loadDocuments();
   if (v === "governance" && state.mode === "hosted") loadGovernance();
   if (run) {
@@ -308,10 +454,15 @@ function render() {
     );
 }
 function showDialog(title, content, eyebrow = "EVIDENCE DETAIL") {
+  if (!$("#detail").open) dialogOpener = document.activeElement;
+  dialogDirty = false;
+  $("#discard-panel").hidden = true;
+  dialogLastField = null;
   $("#dialog-eyebrow").textContent = eyebrow;
   $("#dialog-body").innerHTML =
     `<h2 id="dialog-title">${esc(title)}</h2>${content}`;
   if (!$("#detail").open) $("#detail").showModal();
+  $("#dialog-body").querySelectorAll("form").forEach(updateSelectionCounts);
 }
 function recordHTML(e) {
   return `<section class="evidence-record"><h3>${esc(e.resource)}</h3>${badge(e.status)}<p>${esc(e.summary)}</p><p>Source: ${esc(e.source)}<br>Collected: ${date(e.collected_at)}</p><pre>${esc(JSON.stringify(e.data, null, 2))}</pre><div class="hash mono">${esc(e.id)}<br>SHA-256 ${esc(e.sha256)}</div></section>`;
@@ -369,14 +520,17 @@ function setup(p) {
   );
 }
 async function refresh(full = true) {
-  if (loading || !authenticated) return;
+  if (loading || !authenticated || contextSwitching) return;
   loading = true;
+  const generation = refreshGeneration;
+  refreshAbort = new AbortController();
   try {
     const response = await fetch(
       "/api/state" +
         (state?.run?.id ? "?since=" + encodeURIComponent(state.run.id) : ""),
-      { cache: "no-store" },
+      { cache: "no-store", signal: refreshAbort.signal },
     );
+    if (generation !== refreshGeneration || !authenticated) return;
     if (response.status === 401) {
       authenticated = false;
       state = null;
@@ -385,7 +539,9 @@ async function refresh(full = true) {
     }
     if (!response.ok) throw new Error("The workspace could not be loaded.");
     const next = await response.json();
+    if (generation !== refreshGeneration || !authenticated) return;
     if (next.unchanged && state?.run) next.run = state.run;
+    const contextChanged = ClearTrailUI.mustRenderContext(state, next);
     const changed =
       !state ||
       next.run?.id !== state.run?.id ||
@@ -394,22 +550,35 @@ async function refresh(full = true) {
       next.workspace_id !== state.workspace_id ||
       next.role !== state.role ||
       monitoringKey(next) !== monitoringKey(state);
+    if (contextChanged && state) {
+      resetLibraryContext();
+      if ($("#detail").open) $("#detail").close();
+    }
     state = next;
-    if (full || changed) {
-      if (!full && document.activeElement?.closest("#schedule-form"))
+    $("#connection-status").hidden = true;
+    if (full || changed || contextChanged) {
+      if (
+        !full &&
+        !contextChanged &&
+        ($("#content form[data-unsaved]") || $("#detail").open)
+      ) {
         renderHealthStatus();
-      else render();
+        $("#collect").disabled = state.job.running || state.role === "auditor";
+        $("#collect span").textContent = state.job.running
+          ? "Collecting…"
+          : "Collect evidence";
+      } else render();
     }
     if (lastRunning && !state.job.running && !state.job.error)
       toast("Collection saved. Your latest evidence package is ready.");
     lastRunning = state.job.running;
   } catch (e) {
-    toast(
-      e.message || "Connection lost. Check the service and try again.",
-      true,
-    );
+    if (generation !== refreshGeneration || !authenticated) return;
+    $("#connection-status").hidden = false;
+    $("#connection-status").innerHTML =
+      '<div><strong>Workspace connection interrupted</strong><p>Showing the last loaded data. Your form stays in place while we retry.</p></div><button class="button secondary" id="retry-workspace">Retry now</button>';
   } finally {
-    loading = false;
+    if (generation === refreshGeneration) loading = false;
   }
 }
 $("#collect").addEventListener("click", async () => {
@@ -423,8 +592,9 @@ $("#collect").addEventListener("click", async () => {
     $("#collect").disabled = false;
   }
 });
-$("#close-dialog").addEventListener("click", () => $("#detail").close());
+$("#close-dialog").addEventListener("click", closeDialogSafely);
 document.addEventListener("click", (e) => {
+  if (e.target.closest("#retry-workspace")) refresh(false);
   const control = e.target.closest("[data-control]");
   if (control) controlDetail(control.dataset.control);
   const record = e.target.closest("[data-evidence]");
@@ -451,7 +621,10 @@ document.addEventListener("input", (e) => {
     query = e.target.value;
     filterRows();
   }
-  if (e.target.id === "evidence-search") evidenceRows(e.target.value);
+  if (e.target.id === "evidence-search") {
+    evidenceQuery = e.target.value;
+    evidenceRows();
+  }
 });
 document.addEventListener("change", (e) => {
   if (e.target.id === "provider-filter") provider = e.target.value;
@@ -464,7 +637,7 @@ document.addEventListener("submit", async (e) => {
   e.preventDefault();
   const form = e.target;
   const button = form.querySelector("button[type=submit]");
-  button.disabled = true;
+  setButtonBusy(button, true);
   try {
     const result = await request("/api/attest", {
       control_id: form.dataset.id,
@@ -477,7 +650,7 @@ document.addEventListener("submit", async (e) => {
   } catch (err) {
     $("#form-error").textContent = err.message;
   } finally {
-    button.disabled = false;
+    setButtonBusy(button, false);
   }
 });
 window.addEventListener("hashchange", () => {
@@ -485,13 +658,20 @@ window.addEventListener("hashchange", () => {
   selected = "all";
   provider = "all";
   framework = "all";
+  evidenceQuery = "";
+  setMenu(false);
   render();
+  if (authenticated && state) {
+    $("#main").focus();
+    announce(views[view()][0]);
+  }
 });
 let authenticated = false,
   authMode = "local";
 
 function showSignIn() {
-  documentLibrary = null;
+  resetLibraryContext();
+  $("#connection-status").hidden = true;
   $("#export").hidden = true;
   $("#collect").disabled = true;
   $("#banner").hidden = true;
@@ -637,7 +817,7 @@ async function manageMembers() {
     const result = await response.json();
     showDialog(
       "Workspace access",
-      `<p>Membership uses the exact subject from the configured identity provider. Each identity must sign in through that provider.</p><ul>${result.members.map((m) => `<li><code>${esc(m.subject)}</code> · ${esc(m.role)}</li>`).join("")}</ul><form id="member-form"><div class="field"><label for="member-subject">Identity provider subject</label><input id="member-subject" name="subject" required maxlength="255"></div><div class="field"><label for="member-role">Role</label><select id="member-role" name="role"><option value="auditor">Auditor · read and export</option><option value="operator">Operator · collect and add notes</option><option value="admin">Administrator · manage integrations and access</option><option value="remove">Remove access</option></select></div><p class="form-error" id="member-error" role="alert"></p><button class="button primary" type="submit">Save membership</button></form>`,
+      `<p>Membership uses the exact subject from the configured identity provider. Each identity must sign in through that provider.</p><ul>${result.members.map((m) => `<li><code>${esc(m.subject)}</code> · ${esc(m.role)}</li>`).join("")}</ul><form id="member-form"><div class="field"><label for="member-subject">Identity provider subject</label><input id="member-subject" name="subject" required maxlength="255"></div><div class="field"><label for="member-role">Role</label><select id="member-role" name="role"><option value="auditor">Auditor · read and export</option><option value="operator">Operator · manage evidence and governance</option><option value="admin">Administrator · manage integrations and access</option><option value="remove">Remove access</option></select></div><p class="form-error" id="member-error" role="alert"></p><button class="button primary" type="submit">Save membership</button></form>`,
       "WORKSPACE ADMINISTRATION",
     );
   } catch (error) {
@@ -647,14 +827,27 @@ async function manageMembers() {
 
 document.addEventListener("change", async (event) => {
   if (event.target.id !== "workspace-switch") return;
+  const selector = event.target,
+    previous = state.workspace_id;
+  contextSwitching = true;
+  refreshGeneration++;
+  refreshAbort?.abort();
+  loading = false;
+  selector.disabled = true;
   try {
-    await request("/api/workspace", { tenant_id: event.target.value });
+    await request("/api/workspace", { tenant_id: selector.value });
     if ($("#detail").open) $("#detail").close();
-    documentLibrary = null;
+    resetLibraryContext();
     state = null;
-    await refresh();
+    $("#content").innerHTML =
+      '<p class="loading-line">Loading selected workspace…</p>';
   } catch (error) {
+    selector.value = previous;
     toast(error.message, true);
+  } finally {
+    contextSwitching = false;
+    selector.disabled = false;
+    await refresh();
   }
 });
 
@@ -692,7 +885,7 @@ document.addEventListener("submit", async (event) => {
     return;
   event.preventDefault();
   const button = form.querySelector('[type="submit"]');
-  button.disabled = true;
+  setButtonBusy(button, true);
   try {
     if (form.id === "local-login") {
       await exchangeToken(form.elements.token.value.trim());
@@ -746,7 +939,7 @@ document.addEventListener("submit", async (event) => {
     const target = form.querySelector('[role="alert"]');
     if (target) target.textContent = error.message;
   } finally {
-    button.disabled = false;
+    setButtonBusy(button, false);
   }
 });
 
@@ -797,7 +990,11 @@ function renderHealthStatus() {
       : health.schedule_status === "blocked"
         ? " Scheduled collection is blocked by a workspace quota."
         : "";
-  element.innerHTML = `<div><strong>${esc(healthLabels[health.status] || "Evidence status")}</strong><p>${esc(health.message + extra)}</p></div><a class="text-button" href="#monitoring">Review monitoring ${icon("arrow")}</a>`;
+  const message =
+    health.status === "no_sources" && state.role !== "admin"
+      ? "Ask a workspace administrator to configure a source before relying on automated evidence."
+      : health.message;
+  element.innerHTML = `<div><strong>${esc(healthLabels[health.status] || "Evidence status")}</strong><p>${esc(message + extra)}</p></div><a class="text-button" href="#monitoring">Review monitoring ${icon("arrow")}</a>`;
 }
 
 function monitoringView() {
@@ -851,7 +1048,7 @@ document.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.target,
     button = form.querySelector('[type="submit"]');
-  button.disabled = true;
+  setButtonBusy(button, true);
   try {
     const values = new FormData(form);
     await request("/api/schedule", {
@@ -859,12 +1056,13 @@ document.addEventListener("submit", async (event) => {
       interval_hours: Number(values.get("interval_hours")),
       freshness_hours: Number(values.get("freshness_hours")),
     });
+    delete form.dataset.unsaved;
     await refresh();
     toast("Monitoring policy saved.");
   } catch (error) {
     $("#schedule-error").textContent = error.message;
   } finally {
-    button.disabled = false;
+    setButtonBusy(button, false);
   }
 });
 document.addEventListener("click", async (event) => {
@@ -920,8 +1118,9 @@ document.addEventListener("submit", async (event) => {
   if (form.id !== "audit-package-form") return;
   event.preventDefault();
   const workspace = form.packageWorkspace;
+  $("#audit-package-result").textContent = "";
   const button = form.querySelector('[type="submit"]');
-  button.disabled = true;
+  setButtonBusy(button, true);
   try {
     const versions = [
       ...form.querySelectorAll('[name="version_ids"]:checked'),
@@ -949,7 +1148,10 @@ document.addEventListener("submit", async (event) => {
     });
     if (!response.ok)
       throw new Error(
-        (await response.json()).error || "Package generation failed.",
+        ClearTrailUI.errorMessage(
+          response.status,
+          (await response.json()).error || "Package generation failed.",
+        ),
       );
     const blob = await response.blob();
     if (workspace !== state?.workspace_id)
@@ -962,12 +1164,13 @@ document.addEventListener("submit", async (event) => {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
+    dialogDirty = false;
     $("#audit-package-result").innerHTML =
       `<p>Package downloaded. Retain this manifest SHA-256 separately through a trusted channel:</p><p class="mono document-hash">${esc(response.headers.get("X-ClearTrail-Manifest-SHA256"))}</p><p class="small">Verify offline: <code>python -m cleartrail verify-audit cleartrail-audit-package.zip --manifest-sha256 &lt;trusted hash&gt;</code></p>`;
   } catch (error) {
     form.querySelector('[role="alert"]').textContent = error.message;
   } finally {
-    button.disabled = false;
+    setButtonBusy(button, false);
   }
 });
 let documentLoadSequence = 0;
@@ -1034,25 +1237,118 @@ const governanceFields = {
   },
 };
 
+function libraryToolbar(type) {
+  const filters = libraryFilters[type],
+    governance = type === "governance";
+  const statuses =
+    state.role === "auditor"
+      ? governance
+        ? ["all", "approved", "overdue"]
+        : ["all", "approved"]
+      : governance
+        ? ["all", "pending", "approved", "rejected", "withdrawn", "overdue"]
+        : ["all", "pending", "approved", "rejected", "withdrawn", "expired"];
+  return `<section class="library-toolbar ${type}" aria-label="${governance ? "Governance" : "Document"} filters"><div class="field library-search"><label for="${type}-search">Search ${governance ? "records" : "documents"}</label><input type="search" id="${type}-search" data-library="${type}" data-filter-key="query" value="${esc(filters.query)}" placeholder="${governance ? "Title, owner or reference" : "Title, file, owner or control"}" autocomplete="off"></div>${
+    governance
+      ? `<div class="field"><label for="governance-kind">Record type</label><select id="governance-kind" data-library="governance" data-filter-key="kind"><option value="all">All types</option>${Object.entries(
+          governanceKinds,
+        )
+          .map(
+            ([key, label]) =>
+              `<option value="${key}"${filters.kind === key ? " selected" : ""}>${esc(label)}</option>`,
+          )
+          .join("")}</select></div>`
+      : ""
+  }<div class="field"><label for="${type}-status">Review status</label><select id="${type}-status" data-library="${type}" data-filter-key="status">${statuses.map((value) => `<option value="${value}"${filters.status === value ? " selected" : ""}>${value === "all" ? "All statuses" : value === "overdue" ? "Review overdue" : value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div><button class="button secondary" data-library-clear="${type}">Clear filters</button></section>`;
+}
+function libraryFailure(type, error) {
+  const root = $(
+    type === "governance" ? "#governance-register" : "#document-library",
+  );
+  root.setAttribute("aria-busy", "false");
+  root.innerHTML = `<section class="panel load-error" role="alert"><h3>We couldn’t load this library.</h3><p>${esc(error.message)}</p><button class="button secondary" ${type === "governance" ? "data-governance-refresh" : "data-document-refresh"}>Try again</button></section>`;
+}
+function filterLibrary(type) {
+  const source = type === "governance" ? governanceLibrary : documentLibrary;
+  if (!source || source.workspace !== state?.workspace_id) return;
+  const items = type === "governance" ? source.records : source.documents;
+  const rows = ClearTrailUI[type](items, libraryFilters[type]);
+  const target = $(
+    type === "governance" ? "#governance-rows" : "#document-rows",
+  );
+  if (!target) return;
+  target.innerHTML =
+    rows
+      .map((item) =>
+        type === "governance" ? governanceRow(item) : documentRow(item),
+      )
+      .join("") ||
+    `<tr><td colspan="5" class="empty-cell"><strong>${items.length ? "No matches for these filters." : "No records available yet."}</strong><p>${items.length ? "Try a different title, owner or review status." : state.role === "auditor" ? "Approved records will appear after your team’s independent review." : "Use the create or upload action above to add your first record."}</p>${items.length ? `<button class="button secondary" data-library-clear="${type}">Clear filters</button>` : ""}</td></tr>`;
+  $("#" + type + "-count").textContent =
+    `Showing ${rows.length} of ${items.length} ${type === "governance" ? "records" : "documents"}`;
+}
+function governanceRow(r) {
+  return `<tr><td><button class="control-title" data-governance-open="${esc(r.record_id)}">${esc(r.title)}</button><span class="control-sub">Version ${r.number}</span></td><td data-label="Type / reference">${esc(governanceKinds[r.kind])}${r.reference ? `<br><span class="mono">${esc(r.reference)}</span>` : ""}</td><td data-label="Owner" class="document-subject">${esc(r.owner)}</td><td data-label="Review">${documentStatus(r.status)}</td><td data-label="Risk / next review">${r.risk_scores ? `<span class="risk-band ${esc(r.risk_scores.residual.band)}">${r.risk_scores.residual.score} · ${esc(r.risk_scores.residual.band)}</span><br>` : ""}<span class="${r.overdue ? "text-warning" : ""}">${r.overdue ? "Review overdue" : "Review due"}</span><br>${esc(r.payload.data.next_review_date || r.payload.data.review_date)}</td></tr>`;
+}
+function documentRow(item) {
+  return `<tr><td><button class="control-title" data-document-open="${esc(item.id)}">${esc(item.title)}</button><div class="control-sub">${item.control_ids.map(esc).join(" · ")}</div></td><td data-label="Owner" class="document-subject">${esc(item.owner)}</td><td data-label="Latest version">v${item.latest_version.number}<div class="control-sub">${esc(item.latest_version.filename)}</div></td><td data-label="Review">${documentStatus(item.latest_version.status)}</td><td data-label="Expires">${documentDate(item.latest_version.expires_at)}</td></tr>`;
+}
+for (const eventName of ["input", "change"])
+  document.addEventListener(eventName, (event) => {
+    const { library, filterKey } = event.target.dataset;
+    if (
+      library &&
+      Object.hasOwn(libraryFilters, library) &&
+      Object.hasOwn(libraryFilters[library], filterKey)
+    ) {
+      libraryFilters[library][filterKey] = event.target.value;
+      filterLibrary(library);
+    }
+  });
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-library-clear]");
+  if (!button) return;
+  const type = button.dataset.libraryClear;
+  if (!Object.hasOwn(libraryFilters, type)) return;
+  for (const key of Object.keys(libraryFilters[type]))
+    libraryFilters[type][key] = key === "query" ? "" : "all";
+  document
+    .querySelectorAll(`[data-library="${type}"]`)
+    .forEach(
+      (input) => (input.value = libraryFilters[type][input.dataset.filterKey]),
+    );
+  filterLibrary(type);
+  $("#" + type + "-search")?.focus();
+});
 function governanceView() {
   if (state.mode !== "hosted")
     return '<section class="panel"><h2>Governance</h2><p>Governance records require a hosted organization workspace.</p></section>';
-  return `<section class="panel governance"><div class="section-title"><div><h2>Your governance register</h2><p>Each edit creates an encrypted version. An independent administrator or operator reviews that exact version.</p></div><div class="document-actions"><button class="button secondary" data-governance-refresh>Refresh</button><button class="button secondary" data-governance-export>Export register</button>${state.role !== "auditor" ? '<button class="button primary" data-governance-new>Create record</button>' : ""}</div></div><p class="small">Track the 93 Annex A reference identifiers with your own applicability rationale. Entries and approvals do not measure framework compliance. Risk scoring is ClearTrail’s fixed starter 1–5 likelihood × impact convention; it is not an ISO scoring requirement. Review dates use UTC.</p><p class="small">The register export contains approved records and review history. Export supporting files separately with a document audit package. Licensed standards text is not included.</p><div id="governance-export-result" role="status"></div></section><div id="governance-register" class="section-space governance" aria-live="polite"><p>Loading governance records…</p></div>`;
+  return `<section class="panel governance"><div class="section-title"><div><h2>Governance register</h2><p>Keep risks, decisions and follow-up work ready for independent review.</p></div><div class="document-actions"><button class="button secondary" data-governance-refresh>Refresh</button><button class="button secondary" data-governance-export>Export register</button>${state.role !== "auditor" ? '<button class="button primary" data-governance-new>Create record</button>' : '<span class="role-note">Read-only auditor access</span>'}</div></div><details class="scope-details"><summary>Scope, scoring and export details</summary><p class="small">The 93 Annex A reference IDs help organize your own rationale. Entry counts and approvals are not a compliance score. Risk scores use the fixed starter convention: likelihood × impact, each 1–5. Review dates use UTC. Register exports contain approved records; supporting file bytes require a separate document audit package.</p></details><div id="governance-export-result" role="status"></div></section>${libraryToolbar("governance")}<div id="governance-register" class="governance" aria-busy="true"><p class="loading-line">Loading governance records…</p></div>`;
 }
-
 async function loadGovernance() {
   const workspace = state.workspace_id,
     sequence = ++governanceLoadSequence;
+  const root = $("#governance-register");
+  if (!root) return;
+  root.setAttribute("aria-busy", "true");
   try {
     const data = await documentGet("/api/governance", workspace);
     if (!$("#governance-register") || sequence !== governanceLoadSequence)
       return;
-    const decisions = data.records.filter((r) => r.kind === "applicability");
-    $("#governance-register").innerHTML =
-      `<p class="small">${data.records.length} / ${data.limits.records} records · ${decisions.length} / ${data.reference_count} applicability entries${state.role === "auditor" ? " with approved current versions" : " recorded"} · ${data.records.filter((r) => r.overdue).length} reviews overdue</p><div class="table-panel"><div class="table-scroll"><table><thead><tr><th scope="col">RECORD</th><th scope="col">TYPE / REFERENCE</th><th scope="col">OWNER</th><th scope="col">STATUS</th><th scope="col">RISK / REVIEW</th></tr></thead><tbody>${data.records.map((r) => `<tr><td><button class="control-title" data-governance-open="${esc(r.record_id)}">${esc(r.title)}</button><span class="small">Version ${r.number}</span></td><td>${esc(governanceKinds[r.kind])}${r.reference ? `<br>${esc(r.reference)}` : ""}</td><td class="document-subject">${esc(r.owner)}</td><td>${documentStatus(r.status)}</td><td>${r.risk_scores ? `Residual ${r.risk_scores.residual.score} · ${esc(r.risk_scores.residual.band)}<br>` : ""}${r.overdue ? "Review overdue" : "Review due"}: ${esc(r.payload.data.next_review_date || r.payload.data.review_date)}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-cell">No records available. Start with a scoped risk assessment and applicability decisions.</td></tr>'}</tbody></table></div></div>`;
+    governanceLibrary = { ...data, workspace };
+    const decisions = data.records.filter(
+      (r) => r.kind === "applicability",
+    ).length;
+    root.innerHTML = `<div class="register-summary"><span><strong>${data.records.filter((r) => r.status === "pending").length}</strong> awaiting review</span><span><strong>${data.records.filter((r) => r.overdue).length}</strong> reviews overdue</span><span><strong>${decisions} / ${data.reference_count}</strong> applicability entries${state.role === "auditor" ? " approved" : " recorded"}</span></div><div class="table-panel"><div class="table-scroll" tabindex="0" role="region" aria-label="Governance records"><table class="library-table" role="table"><thead><tr><th scope="col">Record</th><th scope="col">Type / reference</th><th scope="col">Owner</th><th scope="col">Review</th><th scope="col">Risk / next review</th></tr></thead><tbody id="governance-rows"></tbody></table></div><div class="table-bottom"><span id="governance-count" role="status" aria-live="polite"></span><span>${data.records.length} / ${data.limits.records} records retained</span></div></div>`;
+    filterLibrary("governance");
+    root.setAttribute("aria-busy", "false");
   } catch (error) {
-    if ($("#governance-register") && sequence === governanceLoadSequence)
-      $("#governance-register").textContent = error.message;
+    if (
+      $("#governance-register") &&
+      sequence === governanceLoadSequence &&
+      workspace === state?.workspace_id
+    )
+      libraryFailure("governance", error);
   }
 }
 
@@ -1072,7 +1368,7 @@ function governanceField(key, spec, value, options) {
   } else {
     input = `<textarea name="${key}" id="gov-${key}" maxlength="3000" required>${esc(value || "")}</textarea>`;
   }
-  return `<div class="field"><label for="gov-${key}">${esc(label)}</label>${input}</div>`;
+  return `<div class="field${key.includes("date") || key.startsWith("period_") || key.includes("likelihood") || key.includes("impact") ? " compact-field" : ""}"><label for="gov-${key}">${esc(label)}</label>${input}</div>`;
 }
 
 async function governanceForm(item = null) {
@@ -1081,7 +1377,7 @@ async function governanceForm(item = null) {
   const kind = item?.kind || "risk";
   showDialog(
     item ? "Create next governance version" : "Create governance record",
-    `<form id="governance-form" class="governance"><div class="field"><label for="gov-kind">Record type</label><select id="gov-kind" name="kind"${item ? " disabled" : ""}>${Object.entries(
+    `<p class="form-intro">Saving creates a pending version. A separate administrator or operator reviews it before it appears in approved exports.</p><form id="governance-form" class="governance"><div class="field"><label for="gov-kind">Record type</label><select id="gov-kind" name="kind"${item ? " disabled" : ""}>${Object.entries(
       governanceKinds,
     )
       .map(
@@ -1090,7 +1386,7 @@ async function governanceForm(item = null) {
       )
       .join(
         "",
-      )}</select></div><div class="field"><label for="gov-title">Record title</label><input id="gov-title" name="title" maxlength="160" value="${esc(item?.title || "")}" required></div><div class="field"><label for="gov-owner">Responsible owner</label><select id="gov-owner" name="owner">${options.owners.map((v) => `<option value="${esc(v)}"${v === (item?.owner || state.subject) ? " selected" : ""}>${esc(v)}</option>`).join("")}</select></div><div id="governance-fields"></div><p class="small">All fields are required. Use a reasoned “none identified” where appropriate. Implemented applicability decisions and completed actions need at least one approved supporting file before approval. Keep credentials out of records.</p><fieldset class="document-controls"><legend>Exact supporting evidence versions (up to 10)</legend>${options.evidence.map((v) => `<label><input type="checkbox" name="evidence" value="${esc(v.id)}"${item?.payload.evidence_version_ids.includes(v.id) ? " checked" : ""}><span>${esc(v.title)} · v${v.number} · ${esc(v.filename)}</span></label>`).join("") || '<p class="small">No approved files available. Upload and independently review evidence first.</p>'}${(
+      )}</select></div><div class="field"><label for="gov-title">Record title</label><input id="gov-title" name="title" maxlength="160" value="${esc(item?.title || "")}" required></div><div class="field"><label for="gov-owner">Responsible owner</label><select id="gov-owner" name="owner">${options.owners.map((v) => `<option value="${esc(v)}"${v === (item?.owner || state.subject) ? " selected" : ""}>${esc(v)}</option>`).join("")}</select></div><h3 class="form-section-title">Record details</h3><div id="governance-fields" class="form-grid"></div><p class="small">All fields are required. Use a reasoned “none identified” where appropriate. Implemented applicability decisions and completed actions need at least one approved supporting file before approval. Keep credentials out of records.</p><fieldset class="document-controls"><legend>Exact supporting evidence versions (up to 10)</legend>${options.evidence.map((v) => `<label><input type="checkbox" name="evidence" value="${esc(v.id)}"${item?.payload.evidence_version_ids.includes(v.id) ? " checked" : ""}><span>${esc(v.title)} · v${v.number} · ${esc(v.filename)}</span></label>`).join("") || '<p class="small">No approved files available. Upload and independently review evidence first.</p>'}${(
       item?.payload.evidence_version_ids || []
     )
       .filter((id) => !options.evidence.some((v) => v.id === id))
@@ -1154,10 +1450,11 @@ async function governanceForm(item = null) {
   };
   $("#gov-kind").addEventListener("change", fields);
   fields();
+  updateSelectionCounts(form);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const button = form.querySelector('[type="submit"]');
-    button.disabled = true;
+    setButtonBusy(button, true);
     try {
       const values = new FormData(form),
         selectedKind = $("#gov-kind").value,
@@ -1193,7 +1490,7 @@ async function governanceForm(item = null) {
     } catch (error) {
       form.querySelector('[role="alert"]').textContent = error.message;
     } finally {
-      button.disabled = false;
+      setButtonBusy(button, false);
     }
   });
 }
@@ -1234,7 +1531,7 @@ async function governanceDetail(id) {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const button = form.querySelector('[type="submit"]');
-      button.disabled = true;
+      setButtonBusy(button, true);
       try {
         const version = item.versions.find(
             (v) => v.id === form.dataset.version,
@@ -1257,7 +1554,7 @@ async function governanceDetail(id) {
       } catch (error) {
         form.querySelector('[role="alert"]').textContent = error.message;
       } finally {
-        button.disabled = false;
+        setButtonBusy(button, false);
       }
     }),
   );
@@ -1265,7 +1562,7 @@ async function governanceDetail(id) {
 
 async function governanceExport(button) {
   const workspace = state.workspace_id;
-  button.disabled = true;
+  setButtonBusy(button, true);
   try {
     const response = await fetch("/api/governance/export", {
       method: "POST",
@@ -1279,8 +1576,11 @@ async function governanceExport(button) {
     if (!response.ok) {
       const data = await response.json();
       throw new Error(
-        data.error ||
-          "Export failed. Check approved records and linked evidence.",
+        ClearTrailUI.errorMessage(
+          response.status,
+          data.error ||
+            "Export failed. Check approved records and linked evidence.",
+        ),
       );
     }
     const blob = await response.blob();
@@ -1299,7 +1599,7 @@ async function governanceExport(button) {
   } catch (error) {
     toast(error.message, true);
   } finally {
-    button.disabled = false;
+    setButtonBusy(button, false);
   }
 }
 
@@ -1323,7 +1623,7 @@ const documentStatus = (status) =>
 function documentsView() {
   if (state.mode !== "hosted")
     return '<section class="panel"><h2>Team documents</h2><p>Versioned documents and independent review require a hosted organization workspace.</p></section>';
-  return `<section class="panel"><div class="section-title"><div><h2>Team evidence</h2><p>Each upload is encrypted and retained as an immutable version. Approval requires someone other than its uploader and owner.</p></div><div class="document-actions"><button class="button secondary" data-document-refresh>Refresh</button>${state.role !== "auditor" ? '<button class="button primary" data-document-new>Upload evidence</button>' : ""}</div></div><p class="small muted">Text, PDF, DOCX, XLSX and PPTX · 512 KiB per file. Binary files require fresh ClamAV scanning and download as attachments. Customer evidence and approvals do not change automated control results. Auditors see approved, unexpired versions.</p></section><div id="document-library" class="section-space" aria-live="polite"><p>Loading team evidence…</p></div>`;
+  return `<section class="panel"><div class="section-title"><div><h2>Team evidence</h2><p>Exact file versions, accountable owners and independent review.</p></div><div class="document-actions"><button class="button secondary" data-document-refresh>Refresh</button>${state.role !== "auditor" ? '<button class="button primary" data-document-new>Upload evidence</button>' : '<span class="role-note">Approved, unexpired files only</span>'}</div></div><details class="scope-details"><summary>Accepted files and review requirements</summary><p class="small">Text, PDF, DOCX, XLSX and PPTX, up to 512 KiB each. Binary files require fresh scanning and download as attachments. New versions start pending; their uploader and owner cannot approve them. Files and approvals do not change automated control results.</p></details></section>${libraryToolbar("documents")}<div id="document-library" aria-busy="true"><p class="loading-line">Loading team evidence…</p></div>`;
 }
 
 async function documentGet(path, workspace) {
@@ -1334,22 +1634,35 @@ async function documentGet(path, workspace) {
       "Workspace changed. Reopen the evidence in the current workspace.",
     );
   if (!response.ok)
-    throw new Error(data.error || "Evidence could not be loaded.");
+    throw new Error(
+      ClearTrailUI.errorMessage(
+        response.status,
+        data.error || "Evidence could not be loaded.",
+      ),
+    );
   return data;
 }
 
 async function loadDocuments() {
-  const workspace = state.workspace_id;
-  const sequence = ++documentLoadSequence;
+  const workspace = state.workspace_id,
+    sequence = ++documentLoadSequence;
+  const root = $("#document-library");
+  if (!root) return;
+  root.setAttribute("aria-busy", "true");
   try {
     const data = await documentGet("/api/documents", workspace);
     if (!$("#document-library") || sequence !== documentLoadSequence) return;
     documentLibrary = { ...data, workspace };
-    $("#document-library").innerHTML =
-      `<div class="table-panel"><div class="table-scroll"><table><thead><tr><th scope="col">DOCUMENT / CONTROLS</th><th scope="col">OWNER</th><th scope="col">LATEST VERSION</th><th scope="col">REVIEW</th><th scope="col">EXPIRES</th></tr></thead><tbody>${data.documents.map((item) => `<tr><td><button class="control-title" data-document-open="${esc(item.id)}">${esc(item.title)}</button><div class="control-sub">${item.control_ids.map(esc).join(" · ")}</div></td><td class="document-subject">${esc(item.owner)}</td><td>v${item.latest_version.number} · ${esc(item.latest_version.filename)}</td><td>${documentStatus(item.latest_version.status)}</td><td>${documentDate(item.latest_version.expires_at)}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-cell">No evidence available. Upload a policy, access review, or incident exercise record to begin.</td></tr>'}</tbody></table></div><div class="table-bottom"><span>${data.documents.length} ${state.role === "auditor" ? "approved documents" : "documents"}</span><span>${data.used_bytes === null ? "Historical approved versions remain available from document details." : `${(data.used_bytes / 1048576).toFixed(2)} / 25 MiB retained`}</span></div></div>`;
+    root.innerHTML = `<div class="table-panel"><div class="table-scroll" tabindex="0" role="region" aria-label="Team documents"><table class="library-table" role="table"><thead><tr><th scope="col">Document / controls</th><th scope="col">Owner</th><th scope="col">Latest version</th><th scope="col">Review</th><th scope="col">Expires</th></tr></thead><tbody id="document-rows"></tbody></table></div><div class="table-bottom"><span id="documents-count" role="status" aria-live="polite"></span><span>${data.used_bytes === null ? "Approved history is available in document details." : `${(data.used_bytes / 1048576).toFixed(2)} / 25 MiB retained`}</span></div></div>`;
+    filterLibrary("documents");
+    root.setAttribute("aria-busy", "false");
   } catch (error) {
-    if ($("#document-library") && sequence === documentLoadSequence)
-      $("#document-library").textContent = error.message;
+    if (
+      $("#document-library") &&
+      sequence === documentLoadSequence &&
+      workspace === state?.workspace_id
+    )
+      libraryFailure("documents", error);
   }
 }
 
@@ -1447,7 +1760,7 @@ document.addEventListener("submit", async (event) => {
   event.preventDefault();
   const { workspace, item, expectedReview, versionId } = form.evidenceContext;
   const button = form.querySelector('[type="submit"]');
-  button.disabled = true;
+  setButtonBusy(button, true);
   try {
     if (form.id === "document-upload-form") {
       const file = form.elements.file.files[0];
@@ -1516,7 +1829,7 @@ document.addEventListener("submit", async (event) => {
   } catch (error) {
     form.querySelector('[role="alert"]').textContent = error.message;
   } finally {
-    button.disabled = false;
+    setButtonBusy(button, false);
   }
 });
 

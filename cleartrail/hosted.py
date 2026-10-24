@@ -99,7 +99,7 @@ def create_app(settings=None, repository=None):
             request._body = b"".join(chunks)
             if lengths and size != int(lengths[0]):
                 return JSONResponse({"error": "Request body length mismatch."}, status_code=400)
-            if request.url.path not in {"/healthz", "/readyz", "/", "/app.js", "/style.css"}:
+            if request.url.path not in {"/healthz", "/readyz", "/", "/app.js", "/workspace-ui.js", "/style.css"}:
                 # Unrelated cookie changes must not reset a session's budget.
                 # The IP bucket also bounds random capabilities and session churn.
                 import hashlib
@@ -205,11 +205,11 @@ def create_app(settings=None, repository=None):
         def static_file():
             # OS MIME registries can label .js as text/plain; nosniff then
             # correctly blocks execution. Serve our fixed assets explicitly.
-            media = {"index.html": "text/html", "app.js": "text/javascript", "style.css": "text/css"}
+            media = {"index.html": "text/html", "app.js": "text/javascript", "workspace-ui.js": "text/javascript", "style.css": "text/css"}
             return FileResponse(STATIC / filename, media_type=media[filename])
         return static_file
 
-    for route, filename in (("/", "index.html"), ("/app.js", "app.js"), ("/style.css", "style.css")):
+    for route, filename in (("/", "index.html"), ("/app.js", "app.js"), ("/workspace-ui.js", "workspace-ui.js"), ("/style.css", "style.css")):
         # A request query can never select another filesystem path.
         app.add_api_route(route, asset(filename), methods=["GET"], include_in_schema=False)
 

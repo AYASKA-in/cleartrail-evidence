@@ -10,7 +10,7 @@ paths = [root / name for name in ("README.md", "LICENSE", "SECURITY.md", "CONTRI
 paths.extend(path for path in (root / ".github").rglob("*") if path.is_file() and path.suffix in {".yml", ".md"})
 paths.append(root / ".gitattributes")
 paths.append(root / "docs" / "research" / "manifest.json")
-paths.extend(root / name for name in ("docs/qa/results-0.5.json", "docs/security/application-image-0.5.json", "docs/security/application-image-0.6.json", "docs/security/scanner-image-1.5.4-r1.json", "docs/qa/governance-desktop-0.6.png", "docs/qa/governance-mobile-0.6.png"))
+paths.extend(root / name for name in ("docs/qa/results-0.5.json", "docs/security/application-image-0.5.json", "docs/security/application-image-0.6.json", "docs/security/scanner-image-1.5.4-r1.json", "docs/qa/governance-desktop-0.6.png", "docs/qa/governance-mobile-0.6.png", "docs/qa/workspace-desktop-ui.png", "docs/qa/workspace-mobile-ui.png"))
 paths.extend((root / "deploy").glob("*.conf"))
 paths.append(root / "deploy" / "clamav.Dockerfile")
 paths.append(root / "docs" / "security" / "scanner-image-1.5.4-r2.json")
@@ -19,7 +19,7 @@ for folder in ("cleartrail", "tests", "scripts", "docs"):
     for path in (root / folder).rglob("*"):
         catalog_data = path.parent == root / "cleartrail" / "data" / "catalogs" and path.suffix == ".json"
         compatibility_fixture = path.parent == root / "tests" / "fixtures" and path.suffix in {".json", ".sql", ".b64"}
-        if path.is_file() and (path.suffix in {".py", ".md", ".html", ".js", ".css", ".jpg"} or catalog_data or compatibility_fixture):
+        if path.is_file() and (path.suffix in {".py", ".md", ".html", ".js", ".cjs", ".css", ".jpg"} or catalog_data or compatibility_fixture):
             if "__pycache__" not in path.parts and path.resolve().is_relative_to(root):
                 paths.append(path)
 with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:

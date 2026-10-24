@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#123e32">
   <title>ClearTrail · Evidence workspace</title>
   <link rel="stylesheet" href="/style.css">
+  <script src="/workspace-ui.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -29,9 +30,10 @@
   </defs></svg>
   <aside class="sidebar">
     <a class="brand" href="#overview" aria-label="ClearTrail overview"><span class="brand-mark"><svg><use href="#i-shield"/></svg></span>cleartrail<span class="brand-dot">.</span></a>
+    <button class="menu-toggle button secondary" id="menu-toggle" aria-expanded="false" aria-controls="workspace-nav">Menu <span id="mobile-page-name">Overview</span><svg aria-hidden="true"><use href="#i-grid"/></svg></button>
     <div class="workspace"><div class="avatar">N</div><div><strong id="workspace-name">Your workspace</strong><span>Evidence workspace</span></div></div>
     <div class="nav-label">WORKSPACE</div>
-    <nav aria-label="Main navigation">
+    <nav aria-label="Main navigation" id="workspace-nav">
       <a href="#overview" data-view="overview"><svg><use href="#i-grid"/></svg>Overview</a>
       <a href="#controls" data-view="controls"><svg><use href="#i-shield"/></svg>Controls<span class="nav-count">14</span></a>
       <a href="#evidence" data-view="evidence"><svg><use href="#i-folder"/></svg>Evidence library</a>
@@ -50,11 +52,13 @@
       <section class="page-heading"><div><div class="eyebrow">A LITTLE CLARITY GOES A LONG WAY</div><h1 id="heading">Your security, backed by evidence.</h1><p id="subtitle">One place to collect the proof, spot the gaps, and keep moving.</p></div><div class="heading-actions"><a class="button secondary" id="export" href="/api/export"><svg><use href="#i-download"/></svg>Export report</a><button id="collect" class="button primary"><svg><use href="#i-refresh"/></svg><span>Collect evidence</span></button></div></section>
       <div class="collection-meta"><span id="snapshot-time">No collection yet</span><span class="scope-pill">SOC 2 <span>+</span> ISO 27001:2022 · starter checks</span></div>
       <div id="health-status" class="health-status" role="status" hidden></div>
-      <div id="content" aria-live="polite"><div class="empty">Loading your workspace…</div></div>
+      <div id="connection-status" class="connection-status-panel" role="status" hidden></div>
+      <div id="content"><div class="empty">Loading your workspace…</div></div>
+      <div id="announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
       <footer><span><svg><use href="#i-lock"/></svg>Evidence stays on this machine.</span><span>Point-in-time checks · Framework mappings are indicative.</span></footer>
     </main>
   </div>
-  <dialog id="detail" aria-labelledby="dialog-title"><div class="dialog-top"><span class="eyebrow" id="dialog-eyebrow">EVIDENCE DETAIL</span><button class="icon-button" id="close-dialog" aria-label="Close details"><svg><use href="#i-x"/></svg></button></div><div id="dialog-body"></div></dialog>
+  <dialog id="detail" aria-labelledby="dialog-title"><div class="dialog-top"><span class="eyebrow" id="dialog-eyebrow">EVIDENCE DETAIL</span><button class="icon-button" id="close-dialog" aria-label="Close details"><svg><use href="#i-x"/></svg></button></div><section id="discard-panel" class="discard-panel" role="alert" hidden><h3>Keep your unsaved changes?</h3><p>Closing this form discards the changes you have entered.</p><div class="document-actions"><button class="button primary" id="keep-editing">Keep editing</button><button class="button secondary" id="discard-changes">Discard changes</button></div></section><div id="dialog-body"></div></dialog>
   <div id="toast" class="toast" role="status" hidden></div>
 </body>
 </html>

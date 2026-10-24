@@ -7,12 +7,14 @@ include docs/security/application-image-0.5.json docs/security/scanner-image-1.5
 include docs/security/application-image-0.6.json
 include docs/security/scanner-image-1.5.4-r2.json
 include docs/qa/governance-desktop-0.6.png docs/qa/governance-mobile-0.6.png
+include docs/qa/workspace-desktop-ui.png docs/qa/workspace-mobile-ui.png
 recursive-include deploy *.conf
 recursive-include deploy/aws *.yaml
 include deploy/clamav.Dockerfile
 recursive-include cleartrail *.py *.html *.css *.js
 recursive-include cleartrail/data/catalogs *.json
 recursive-include tests *.py
+recursive-include tests/frontend *.cjs
 recursive-include tests/fixtures *.b64
 recursive-include tests/fixtures *.sql *.json
 recursive-include scripts *.py

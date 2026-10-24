@@ -326,7 +326,7 @@ def create_server(store: Store, config: dict, demo: bool = False, port: int = 80
                 if path == "/api/csv":
                     return self.reply(200, controls_csv(run), "text/csv; charset=utf-8", "controls.csv")
                 return self.reply(200, report_html(run), "text/html; charset=utf-8")
-            assets = {"/": ("index.html", "text/html"), "/app.js": ("app.js", "text/javascript"), "/style.css": ("style.css", "text/css")}
+            assets = {"/": ("index.html", "text/html"), "/app.js": ("app.js", "text/javascript"), "/workspace-ui.js": ("workspace-ui.js", "text/javascript"), "/style.css": ("style.css", "text/css")}
             if path in assets:
                 name, mime = assets[path]
                 return self.reply(200, (STATIC / name).read_bytes(), mime + "; charset=utf-8")

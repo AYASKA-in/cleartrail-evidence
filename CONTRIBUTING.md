@@ -25,8 +25,10 @@ python -m pytest -q
 python -m ruff check cleartrail scripts tests --select F
 ```
 
-Node.js is optional for `node --check cleartrail/static/app.js`; no frontend build
-is needed. Preserve standard-library local/core and offline-verifier execution.
+Node.js 20+ runs the presentation regressions with
+`node --test tests/frontend/workspace-ui.test.cjs` and checks syntax with
+`node --check cleartrail/static/app.js`. CI requires these checks; the application
+runtime needs no Node.js or frontend build. Preserve standard-library local/core and offline-verifier execution.
 
 PostgreSQL tests use `CLEARTRAIL_TEST_POSTGRES_URL` for an empty disposable database
 owned by a non-superuser/non-BYPASSRLS role. They create data. Never use customer

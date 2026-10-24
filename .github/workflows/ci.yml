@@ -16,6 +16,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install --require-hashes -r requirements-hosted.lock
       - run: python -m pip install '.[dev]'
+      - run: node --check cleartrail/static/app.js
+      - run: node --test tests/frontend/workspace-ui.test.cjs
       - run: python -m pytest -q
       - run: python -m ruff check cleartrail scripts tests --select F
       - run: python -m pip_audit -r requirements-hosted.lock --strict

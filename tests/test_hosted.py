@@ -60,7 +60,7 @@ def test_anonymous_reads_and_writes_are_denied(setup):
 
 
 def test_static_assets_use_explicit_types_with_nosniff(setup):
-    for route, media in (("/", "text/html"), ("/app.js", "text/javascript"), ("/style.css", "text/css")):
+    for route, media in (("/", "text/html"), ("/app.js", "text/javascript"), ("/workspace-ui.js", "text/javascript"), ("/style.css", "text/css")):
         result = setup[4].get(route)
         assert result.status_code == 200
         assert result.headers["content-type"].split(";")[0] == media
