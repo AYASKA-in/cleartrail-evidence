@@ -75,7 +75,7 @@ sources, observations and limitations.
 | Area | Available in 0.6.0 |
 |---|---|
 | Collection | Read-only GitHub, Google Directory and AWS checks with explicit scope, bounded requests and incomplete-coverage reporting |
-| Workspace usability | Responsive navigation, searchable document/governance registers, review filters, draft-aware dialogs and explicit export choices |
+| Workspace usability | Responsive navigation, server search/sort/pagination, governed owner labels, encrypted private drafts and explicit export choices |
 | Local workflow | Standard-library CLI, loopback dashboard, SQLite history and a synthetic demo that contacts no provider accounts |
 | Hosted identity | OIDC authorization code flow, S256 PKCE, nonce/state, verified issuer/subject membership and revocable database sessions |
 | Organizations | Separate workspaces; administrator, operator and auditor roles; active-workspace mutation checks |
@@ -94,7 +94,7 @@ scores and an offline-verifiable JSON register. Licensed standards text is not
 distributed; entry counts are not a compliance score. Supporting file bytes
 remain in separate document audit packages. See [GOVERNANCE.md](docs/GOVERNANCE.md).
 
-Focused UI checks, synthetic desktop/mobile screenshots and remaining usability work are recorded in [UI_UX_REVIEW.md](docs/UI_UX_REVIEW.md).
+Private recovery, owner labels, page navigation and expanded accessibility measurements are documented in [WORKSPACE_UX_CLOSEOUT.md](docs/WORKSPACE_UX_CLOSEOUT.md). The [accessibility guide](docs/ACCESSIBILITY.md) distinguishes automated checks from manual assistive-technology acceptance.
 
 ## Choose a deployment mode
 
@@ -516,6 +516,8 @@ opportunities, not delivered features or delivery promises.
 | Backup, key recovery and restore | [RECOVERY.md](docs/RECOVERY.md) |
 | Security boundaries and internal review | [HARDENING.md](docs/HARDENING.md), [SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) |
 | Measurements and readiness | [VALIDATION.md](docs/VALIDATION.md), [RELEASE_GATES.md](docs/RELEASE_GATES.md) |
+| Private recovery, labels and pagination | [WORKSPACE_RECOVERY.md](docs/WORKSPACE_RECOVERY.md) |
+| Accessibility checks and manual acceptance | [ACCESSIBILITY.md](docs/ACCESSIBILITY.md) |
 | Workspace usability and responsive browser checks | [UI_UX_REVIEW.md](docs/UI_UX_REVIEW.md) |
 | Research and future scope | [REFERENCE_RESEARCH.md](docs/REFERENCE_RESEARCH.md), [PRODUCT_GAP_ROADMAP.md](docs/PRODUCT_GAP_ROADMAP.md) |
 

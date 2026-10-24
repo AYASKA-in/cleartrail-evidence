@@ -1,0 +1,409 @@
+{
+  "checked_on": "2026-10-24",
+  "fixture": "Synthetic local OIDC/PostgreSQL workspace; populated snapshot used empty sources and zero automated passes",
+  "automatic_scope": [
+    "wcag2a",
+    "wcag2aa",
+    "wcag21a",
+    "wcag21aa",
+    "wcag22aa",
+    "best-practice"
+  ],
+  "checks": [
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#overview",
+      "at": "2026-10-24T16:44:13.692Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 40,
+      "context": "final admin desktop"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#controls",
+      "at": "2026-10-24T16:44:13.881Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 40,
+      "context": "final admin desktop"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#evidence",
+      "at": "2026-10-24T16:44:14.033Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 40,
+      "context": "final admin desktop"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#integrations",
+      "at": "2026-10-24T16:44:14.204Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 40,
+      "context": "final admin desktop"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#reports",
+      "at": "2026-10-24T16:44:14.373Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 46,
+      "context": "final admin desktop"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#monitoring",
+      "at": "2026-10-24T16:44:14.546Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 41,
+      "context": "final admin desktop"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#documents",
+      "at": "2026-10-24T16:44:15.024Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 49,
+      "context": "final admin desktop"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#governance",
+      "at": "2026-10-24T16:44:15.388Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 49,
+      "context": "final admin desktop"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#governance",
+      "at": "2026-10-24T16:29:25.114Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 27,
+      "context": "risk form"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#governance",
+      "at": "2026-10-24T16:31:02.693Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 27,
+      "context": "applicability form"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#governance",
+      "at": "2026-10-24T16:31:03.026Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 27,
+      "context": "internal_audit form"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#governance",
+      "at": "2026-10-24T16:31:03.297Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 27,
+      "context": "management_review form"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#governance",
+      "at": "2026-10-24T16:31:03.581Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 27,
+      "context": "corrective_action form"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#documents",
+      "at": "2026-10-24T16:33:40.594Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 27,
+      "context": "document upload form"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#documents",
+      "at": "2026-10-24T16:34:08.778Z",
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            [
+              "#dialog-title"
+            ]
+          ]
+        }
+      ],
+      "passed": 28,
+      "context": "membership and identity labels"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#integrations",
+      "at": "2026-10-24T16:42:16.418Z",
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            [
+              "#dialog-body > p:nth-child(2)"
+            ],
+            [
+              "li:nth-child(1) > div:nth-child(1) > .small"
+            ],
+            [
+              "li:nth-child(2) > div:nth-child(1) > .small"
+            ]
+          ]
+        }
+      ],
+      "passed": 21,
+      "context": "private draft manager"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#governance",
+      "at": "2026-10-24T16:42:29.802Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 49,
+      "context": "admin 320px reflow"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#controls",
+      "at": "2026-10-24T16:51:46.179Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 27,
+      "context": "manual team note recovery"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#overview",
+      "at": "2026-10-24T16:55:08.836Z",
+      "violations": [],
+      "incomplete": [
+        {
+          "id": "color-contrast",
+          "nodes": [
+            [
+              ".ring > div > strong"
+            ],
+            [
+              ".ring > div > span"
+            ]
+          ]
+        }
+      ],
+      "passed": 47,
+      "context": "final populated empty-source snapshot"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#controls",
+      "at": "2026-10-24T16:55:09.144Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 46,
+      "context": "final populated empty-source snapshot"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#evidence",
+      "at": "2026-10-24T16:55:09.305Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 46,
+      "context": "final populated empty-source snapshot"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#governance",
+      "at": "2026-10-24T16:55:58.610Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 49,
+      "context": "auditor workspace"
+    },
+    {
+      "engine": {
+        "name": "axe-core",
+        "version": "4.14.0"
+      },
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+      "page": "#documents",
+      "at": "2026-10-24T16:55:58.920Z",
+      "violations": [],
+      "incomplete": [],
+      "passed": 49,
+      "context": "auditor workspace"
+    }
+  ],
+  "remediated": [
+    "Small eyebrow/version and populated control-count contrast",
+    "Populated dashboard metric labels, denominator and idle-provider contrast",
+    "Google provider mark contrast",
+    "Local-avatar accessible role"
+  ],
+  "reflow": [
+    {
+      "width": 320,
+      "client": 305,
+      "scroll": 305,
+      "overflow": []
+    },
+    {
+      "client": 360,
+      "overflow": [],
+      "scroll": 360,
+      "width": 375
+    },
+    {
+      "client": 625,
+      "overflow": [],
+      "scroll": 625,
+      "width": 640
+    },
+    {
+      "client": 753,
+      "overflow": [
+        "TABLE",
+        "THEAD",
+        "TR",
+        "TH",
+        "governance-rows",
+        "TR",
+        "TD",
+        "SPAN"
+      ],
+      "scroll": 753,
+      "width": 768
+    },
+    {
+      "client": 1009,
+      "overflow": [],
+      "scroll": 1009,
+      "width": 1024
+    },
+    {
+      "client": 1265,
+      "overflow": [],
+      "scroll": 1265,
+      "width": 1280
+    }
+  ],
+  "manual_notes": [
+    "No page-level horizontal overflow at checked widths; 768px table content uses its keyboard-focusable scroll region.",
+    "Logo/workspace foreground #20372f on #f0f4ee has computed 11.45:1 contrast.",
+    "Incomplete scanner checks are retained as manual-review items, not counted as automatic passes.",
+    "Native NVDA/VoiceOver sessions, Firefox/Safari, native zoom and native OS accessibility settings were not exercised."
+  ],
+  "limitations": "Automated findings and keyboard/reflow checks do not establish WCAG conformance."
+}

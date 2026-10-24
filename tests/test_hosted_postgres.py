@@ -20,10 +20,34 @@ from cleartrail.documents import DocumentConflict
 from test_documents import payload
 from test_governance import payload as governance_payload
 from cleartrail.hosted_repository import governance_records, governance_versions, governance_reviews
+from cleartrail.hosted_repository import drafts, member_profiles
 from cleartrail.hosted_settings import HostedSettings
 
 URL = os.environ.get("CLEARTRAIL_TEST_POSTGRES_URL")
 pytestmark = pytest.mark.skipif(not URL, reason="Disposable PostgreSQL not configured")
+
+
+def test_private_recovery_rls_and_concurrent_draft_compare_and_swap(pg):
+    repo, a, b = pg
+    repo.set_identity_label(a, "alice", "alice", "Security owner")
+    first = repo.save_draft(a, "alice", "governance:new", {"title": "Original"}, None)["draft"]
+    with repo.engine.connect() as db:
+        for table in (drafts, member_profiles):
+            assert list(db.execute(select(table))) == []
+    with repo.scoped(b) as (db, _):
+        for table in (drafts, member_profiles):
+            assert list(db.execute(select(table))) == []
+    with pytest.raises(DBAPIError):
+        with repo.scoped(b) as (db, _):
+            db.execute(insert(member_profiles).values(tenant_id=a, subject="alice", issuer=repo.settings.oidc_issuer, label="Forged"))
+    def save_once(_):
+        try:
+            return repo.save_draft(a, "alice", "governance:new", {"title": "Updated"}, first["revision"])
+        except DocumentConflict:
+            return None
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        assert len([result for result in pool.map(save_once, range(4)) if result]) == 1
+    assert repo.draft(a, "alice", "governance:new")["draft"]["fields"]["title"] == "Updated"
 
 
 @pytest.fixture

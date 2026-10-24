@@ -214,13 +214,17 @@ python -m pip install --require-hashes -r requirements-hosted.lock
 ```
 
 Review the lock diff, audit, tests and Linux container build before release.
-Schema version 5 explicitly migrates versions 1–4 while preserving source evidence, schedules, ciphertext and jobs. A version 1 upgrade leaves scheduling disabled. Migration is idempotent; future incompatible schemas still need reviewed migrations and recovery plans before deployment.
+Schema version 6 explicitly migrates versions 1–5 while preserving source evidence, schedules, ciphertext and jobs. A version 1 upgrade leaves scheduling disabled. Migration is idempotent; future incompatible schemas still need reviewed migrations and recovery plans before deployment.
 
 ## Governance in 0.6
 
 Schema 5 adds `ct_governance_records`, `ct_governance_versions` and
 `ct_governance_reviews`. Grant the runtime role DML on these tables after the
-schema-owner migration. Forced RLS is required on 17 tenant-scoped tables.
+schema-owner migration. Schema 6 additionally creates `ct_drafts` and
+`ct_member_profiles`; grant runtime DML on those two tables too. Forced RLS is
+required on all **19** tenant-scoped tables, and `ct_schema` remains SELECT-only.
+Read [WORKSPACE_RECOVERY.md](WORKSPACE_RECOVERY.md) for private retention,
+identity-label semantics and list paging.
 Vault rotation and backups include governance payloads. Read
 [GOVERNANCE.md](GOVERNANCE.md) for approval/evidence-link semantics and limits.
 For a credit-funded Mumbai staging candidate, see

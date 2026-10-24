@@ -68,7 +68,31 @@ const ClearTrailUI = (() => {
       previous.subject !== next.subject
     );
   }
+  function draftFields(elements, allowed, recordKind) {
+    const fields = {};
+    for (const input of elements) {
+      if (
+        !allowed.has(input.name) ||
+        ["file", "password", "submit", "button"].includes(input.type)
+      )
+        continue;
+      if (input.type === "checkbox") {
+        if (["evidence", "related", "control_ids"].includes(input.name)) {
+          fields[input.name] ||= [];
+          if (input.checked) fields[input.name].push(input.value);
+        } else fields[input.name] = input.checked ? "true" : "false";
+      } else fields[input.name] = input.value;
+    }
+    if (recordKind) fields.kind = recordKind;
+    return fields;
+  }
+  function serialQueue() {
+    let tail = Promise.resolve();
+    return (task) => (tail = tail.catch(() => {}).then(task));
+  }
   return Object.freeze({
+    serialQueue,
+    draftFields,
     documents,
     governance,
     errorMessage,

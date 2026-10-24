@@ -22,3 +22,6 @@ recursive-include docs *.md *.jpg
 recursive-include .github *.yml *.md
 global-exclude *.pyc
 global-exclude __pycache__
+
+include docs/qa/accessibility-workspace.json
+include docs/qa/workspace-recovery-desktop.png docs/qa/workspace-recovery-mobile.png

@@ -24,6 +24,7 @@ from .validation import strict_json_loads
 from .errors import EvidenceIntegrityError
 from .documents import DocumentConflict, DocumentNotFound, MAX_UPLOAD_BODY
 from .scanning import ScannerUnavailable, FileRejected
+from .workspace_ux import page_query
 
 LOGGER = logging.getLogger(__name__)
 STATIC = Path(__file__).with_name("static")
@@ -255,12 +256,13 @@ def create_app(settings=None, repository=None):
     @app.get("/api/documents")
     def document_list(request: Request):
         identity = session(request)
-        return repo.document_list(identity["active_tenant"], identity["subject"])
+        return repo.library_page(identity["active_tenant"], identity["subject"], "documents", page_query(list(request.query_params.multi_items()), "documents"))
 
     @app.get("/api/documents/owners")
     def document_owners(request: Request):
         identity = session(request, roles={"admin", "operator"})
-        return {"owners": repo.document_owners(identity["active_tenant"], identity["subject"])}
+        owners = repo.document_owners(identity["active_tenant"], identity["subject"])
+        return {"owners": owners, "identity_labels": repo.identity_labels(identity["active_tenant"], identity["subject"], owners)}
 
     @app.post("/api/documents/upload")
     async def document_upload(request: Request):
@@ -298,16 +300,16 @@ def create_app(settings=None, repository=None):
     @app.get("/api/governance")
     def governance_list(request: Request):
         identity = session(request)
-        if request.query_params:
-            raise HTTPException(400, "Governance queries cannot select a workspace.")
-        return repo.governance_list(identity["active_tenant"], identity["subject"])
+        return repo.library_page(identity["active_tenant"], identity["subject"], "governance", page_query(list(request.query_params.multi_items()), "governance"))
 
     @app.get("/api/governance/options")
     def governance_options(request: Request):
         identity = session(request, roles={"admin", "operator"})
         if request.query_params:
             raise HTTPException(400, "Invalid governance query.")
-        return repo.governance_options(identity["active_tenant"], identity["subject"])
+        data = repo.governance_options(identity["active_tenant"], identity["subject"])
+        data["identity_labels"] = repo.identity_labels(identity["active_tenant"], identity["subject"], data["owners"])
+        return data
 
     @app.post("/api/governance/save")
     async def governance_save(request: Request):
@@ -340,7 +342,10 @@ def create_app(settings=None, repository=None):
         identity = session(request)
         if request.query_params:
             raise HTTPException(400, "Invalid governance query.")
-        return repo.governance_detail(identity["active_tenant"], identity["subject"], record_id)
+        data = repo.governance_detail(identity["active_tenant"], identity["subject"], record_id)
+        subjects = [v["owner"] for v in data["versions"]] + [v["created_by"] for v in data["versions"]] + [r["reviewer"] for v in data["versions"] for r in v["reviews"]]
+        data["identity_labels"] = repo.identity_labels(identity["active_tenant"], identity["subject"], subjects)
+        return data
 
     @app.post("/api/documents/assign")
     async def document_assign(request: Request):
@@ -366,7 +371,10 @@ def create_app(settings=None, repository=None):
     @app.get("/api/documents/{document_id}")
     def document_detail(request: Request, document_id: str):
         identity = session(request)
-        return repo.document_detail(identity["active_tenant"], identity["subject"], document_id)
+        data = repo.document_detail(identity["active_tenant"], identity["subject"], document_id)
+        subjects = [data["owner"]] + [v["uploaded_by"] for v in data["versions"]] + [r["reviewer"] for v in data["versions"] for r in v["reviews"]]
+        data["identity_labels"] = repo.identity_labels(identity["active_tenant"], identity["subject"], subjects)
+        return data
 
     @app.post("/api/schedule")
     async def set_schedule(request: Request):
@@ -429,13 +437,43 @@ def create_app(settings=None, repository=None):
     @app.get("/api/members")
     def list_members(request: Request):
         identity = session(request, roles={"admin"})
-        return {"members": repo.member_list(identity["active_tenant"])}
+        data = repo.member_list(identity["active_tenant"])
+        return {"members": data, "identity_labels": repo.identity_labels(identity["active_tenant"], identity["subject"], [r["subject"] for r in data])}
 
     @app.post("/api/members")
     async def membership(request: Request):
         identity = await async_session(request, {"admin"})
         value = await body(request, {"subject", "role"})
         await run_in_threadpool(repo.set_member, identity["active_tenant"], identity["subject"], value["subject"], value["role"])
+        return {"saved": True}
+
+    @app.get("/api/draft-index")
+    def private_draft_index(request: Request):
+        identity = session(request, roles={"admin", "operator"})
+        if request.query_params:
+            raise HTTPException(400, "Draft index cannot select a person or workspace.")
+        return repo.draft_index(identity["active_tenant"], identity["subject"])
+
+    @app.get("/api/drafts")
+    def private_draft(request: Request):
+        identity = session(request, roles={"admin", "operator"})
+        pairs = list(request.query_params.multi_items())
+        if len(pairs) != 1 or pairs[0][0] != "key":
+            raise HTTPException(400, "Choose one private draft key.")
+        return repo.draft(identity["active_tenant"], identity["subject"], pairs[0][1])
+
+    @app.post("/api/drafts")
+    async def save_private_draft(request: Request):
+        identity = await async_session(request, {"admin", "operator"})
+        value = await body(request, {"key", "fields", "expected_revision"})
+        return await run_in_threadpool(repo.save_draft, identity["active_tenant"], identity["subject"],
+                                      value["key"], value["fields"], value["expected_revision"])
+
+    @app.post("/api/member-label")
+    async def member_label(request: Request):
+        identity = await async_session(request, {"admin"})
+        value = await body(request, {"subject", "label"})
+        await run_in_threadpool(repo.set_identity_label, identity["active_tenant"], identity["subject"], value["subject"], value["label"])
         return {"saved": True}
 
     @app.get("/api/audit")

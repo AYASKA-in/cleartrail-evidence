@@ -10,7 +10,7 @@ paths = [root / name for name in ("README.md", "LICENSE", "SECURITY.md", "CONTRI
 paths.extend(path for path in (root / ".github").rglob("*") if path.is_file() and path.suffix in {".yml", ".md"})
 paths.append(root / ".gitattributes")
 paths.append(root / "docs" / "research" / "manifest.json")
-paths.extend(root / name for name in ("docs/qa/results-0.5.json", "docs/security/application-image-0.5.json", "docs/security/application-image-0.6.json", "docs/security/scanner-image-1.5.4-r1.json", "docs/qa/governance-desktop-0.6.png", "docs/qa/governance-mobile-0.6.png", "docs/qa/workspace-desktop-ui.png", "docs/qa/workspace-mobile-ui.png"))
+paths.extend(root / name for name in ("docs/qa/results-0.5.json", "docs/security/application-image-0.5.json", "docs/security/application-image-0.6.json", "docs/security/scanner-image-1.5.4-r1.json", "docs/qa/governance-desktop-0.6.png", "docs/qa/governance-mobile-0.6.png", "docs/qa/workspace-desktop-ui.png", "docs/qa/workspace-mobile-ui.png", "docs/qa/accessibility-workspace.json", "docs/qa/workspace-recovery-desktop.png", "docs/qa/workspace-recovery-mobile.png"))
 paths.extend((root / "deploy").glob("*.conf"))
 paths.append(root / "deploy" / "clamav.Dockerfile")
 paths.append(root / "docs" / "security" / "scanner-image-1.5.4-r2.json")

@@ -34,12 +34,10 @@ Search operates on the records already returned by the authorized server. It is 
 
 Screenshots contain only synthetic records: [desktop](qa/workspace-desktop-ui.png), [mobile](qa/workspace-mobile-ui.png).
 
-## Remaining development space
+## Follow-up completed
 
-1. Add friendly identity labels from an explicitly governed directory profile; exact identity subjects are currently displayed in full so owners/reviewers cannot be confused.
-2. Add server pagination and richer date/owner sorting as quotas/populations grow. Filters currently cover the bounded list returned by the server.
-3. Design secure draft persistence and navigation guards across all internal route/type changes. Current protection covers modal closing, full-page unload and background polling; it does not persist drafts across logout, role changes, record-type replacement or internal route navigation.
-4. Test NVDA/VoiceOver, high zoom, high contrast, reduced motion and additional browsers with representative users. Focus/semantic checks here do not establish WCAG conformance.
-5. Add engagement-specific auditor onboarding, guided provider authorization, bulk evidence actions and richer risk remediation workflows after their server permissions and lifecycle are defined.
+Private encrypted recovery (including a My drafts list), administrator-governed friendly labels and server search/filter/sort/page navigation are implemented. The broader automated scan covers eight page views and five governance forms, with keyboard/reflow checks and contrast remediation. See [WORKSPACE_UX_CLOSEOUT.md](WORKSPACE_UX_CLOSEOUT.md) for current measurements, [WORKSPACE_RECOVERY.md](WORKSPACE_RECOVERY.md) for behavior/limits and [ACCESSIBILITY.md](ACCESSIBILITY.md) for actual test scope. This original review's counts describe the preceding UI baseline.
 
-Cloud deployment, real Google/provider acceptance and independent security/recovery release gates remain in [RELEASE_GATES.md](RELEASE_GATES.md). Historical image/test measurements in [VALIDATION.md](VALIDATION.md) describe the earlier governance baseline; the UI update is checked by its own CI revision.
+Actual NVDA/VoiceOver and representative-user sessions, additional browser engines and native OS accessibility-mode acceptance remain separate manual validation. Engagement-specific auditor onboarding, guided provider authorization, bulk evidence actions and broader remediation are product-roadmap work, outside this UI follow-up.
+
+Cloud deployment, live provider acceptance and independent operational/security release gates remain in [RELEASE_GATES.md](RELEASE_GATES.md).

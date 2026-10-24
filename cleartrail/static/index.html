@@ -46,7 +46,7 @@
     <div class="sidebar-bottom"><div class="local-card"><svg><use href="#i-lock"/></svg><strong>Your evidence. Your machine.</strong><p>Local storage. Read-only access.<br>Open source, always.</p></div><span class="version">CLEARTRAIL <span>v0.6.0 · MIT</span></span></div>
   </aside>
   <div class="app">
-    <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong id="page-name">Overview</strong></div><div class="top-meta"><span class="local-pill"><i></i>Local workspace</span><span class="profile" aria-label="Local user">CT</span></div></header>
+    <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> <strong id="page-name">Overview</strong></div><div class="top-meta"><span class="local-pill"><i></i>Local workspace</span><span class="profile" role="img" aria-label="Local user">CT</span></div></header>
     <main id="main" tabindex="-1">
       <div id="banner" class="notice" hidden></div>
       <section class="page-heading"><div><div class="eyebrow">A LITTLE CLARITY GOES A LONG WAY</div><h1 id="heading">Your security, backed by evidence.</h1><p id="subtitle">One place to collect the proof, spot the gaps, and keep moving.</p></div><div class="heading-actions"><a class="button secondary" id="export" href="/api/export"><svg><use href="#i-download"/></svg>Export report</a><button id="collect" class="button primary"><svg><use href="#i-refresh"/></svg><span>Collect evidence</span></button></div></section>
@@ -58,7 +58,7 @@
       <footer><span><svg><use href="#i-lock"/></svg>Evidence stays on this machine.</span><span>Point-in-time checks · Framework mappings are indicative.</span></footer>
     </main>
   </div>
-  <dialog id="detail" aria-labelledby="dialog-title"><div class="dialog-top"><span class="eyebrow" id="dialog-eyebrow">EVIDENCE DETAIL</span><button class="icon-button" id="close-dialog" aria-label="Close details"><svg><use href="#i-x"/></svg></button></div><section id="discard-panel" class="discard-panel" role="alert" hidden><h3>Keep your unsaved changes?</h3><p>Closing this form discards the changes you have entered.</p><div class="document-actions"><button class="button primary" id="keep-editing">Keep editing</button><button class="button secondary" id="discard-changes">Discard changes</button></div></section><div id="dialog-body"></div></dialog>
+  <dialog id="detail" aria-labelledby="dialog-title"><div class="dialog-top"><span class="eyebrow" id="dialog-eyebrow">EVIDENCE DETAIL</span><button class="icon-button" id="close-dialog" aria-label="Close details"><svg><use href="#i-x"/></svg></button></div><section id="discard-panel" class="discard-panel" role="alert" hidden><h3>Keep your unsaved changes?</h3><p>Closing this form discards the changes you have entered.</p><div class="document-actions"><button class="button primary" id="keep-editing">Keep editing</button><button class="button secondary" id="keep-draft" hidden>Close and keep draft</button><button class="button secondary" id="discard-changes">Discard changes</button></div></section><div id="dialog-body"></div></dialog>
   <div id="toast" class="toast" role="status" hidden></div>
 </body>
 </html>

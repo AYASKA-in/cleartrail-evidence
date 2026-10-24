@@ -100,11 +100,22 @@ function setButtonBusy(button, busy) {
   button.toggleAttribute("disabled", busy);
   button.setAttribute("aria-busy", String(busy));
 }
+let identityLabels = Object.create(null);
+const libraryPages = {
+  documents: { page: 1, page_size: 25, sort: "newest" },
+  governance: { page: 1, page_size: 25, sort: "newest" },
+};
+const libraryTimers = {};
 const libraryFilters = {
   documents: { query: "", status: "all" },
   governance: { query: "", kind: "all", status: "all" },
 };
 function resetLibraryContext() {
+  identityLabels = Object.create(null);
+  for (const type of ["documents", "governance"]) {
+    clearTimeout(libraryTimers[type]);
+    libraryPages[type] = { page: 1, page_size: 25, sort: "newest" };
+  }
   documentLibrary = null;
   governanceLibrary = null;
   libraryFilters.documents = { query: "", status: "all" };
@@ -121,6 +132,12 @@ function announce(message) {
 function closeDialogSafely() {
   if (dialogDirty) {
     $("#discard-panel").hidden = false;
+    $("#discard-panel p").textContent = draftContexts.has(
+      $("#dialog-body form"),
+    )
+      ? "Keep editing, retain a private recovery draft, or discard these changes."
+      : "Closing this form discards the changes you have entered.";
+    $("#keep-draft").hidden = !draftContexts.has($("#dialog-body form"));
     $("#keep-editing").focus();
   } else $("#detail").close();
 }
@@ -155,7 +172,23 @@ $("#keep-editing").addEventListener("click", () => {
   if (dialogLastField?.isConnected) dialogLastField.focus();
   else $("#dialog-body").querySelector("textarea,input,select,button")?.focus();
 });
-$("#discard-changes").addEventListener("click", () => $("#detail").close());
+$("#keep-draft").addEventListener("click", async () => {
+  try {
+    await flushDraft($("#dialog-body form"), undefined, true);
+    $("#detail").close();
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+$("#discard-changes").addEventListener("click", async () => {
+  try {
+    const form = $("#dialog-body form");
+    if (form) await clearDraft(form);
+    $("#detail").close();
+  } catch (error) {
+    toast("Draft could not be discarded. " + error.message, true);
+  }
+});
 $("#detail").addEventListener("close", () => {
   dialogDirty = false;
   $("#discard-panel").hidden = true;
@@ -192,7 +225,12 @@ function updateSelectionCounts(form) {
   });
 }
 window.addEventListener("beforeunload", (event) => {
-  if (dialogDirty || $("#content form[data-unsaved]")) {
+  const modalForm = $("#dialog-body form"),
+    inlineForm = $("#content form[data-unsaved]");
+  if (
+    (dialogDirty && !draftDurable(modalForm)) ||
+    (inlineForm && !draftDurable(inlineForm))
+  ) {
     event.preventDefault();
     event.returnValue = "";
   }
@@ -234,7 +272,7 @@ async function request(path, body, workspace = state?.workspace_id) {
     throw new Error(
       "Workspace changed. Reopen the record in your current workspace.",
     );
-  dialogDirty = false;
+  if (path !== "/api/drafts") dialogDirty = false;
   return data;
 }
 function integrationState(p) {
@@ -445,6 +483,8 @@ function render() {
   }
   decorateWorkspace();
   renderHealthStatus();
+  if (v === "monitoring" && state.role === "admin")
+    attachDraft($("#schedule-form"), "schedule:policy");
   if (state.job.error && state.mode !== "hosted")
     toast(
       "Collection did not complete: " +
@@ -463,6 +503,8 @@ function showDialog(title, content, eyebrow = "EVIDENCE DETAIL") {
     `<h2 id="dialog-title">${esc(title)}</h2>${content}`;
   if (!$("#detail").open) $("#detail").showModal();
   $("#dialog-body").querySelectorAll("form").forEach(updateSelectionCounts);
+  const noteForm = $("#attest-form");
+  if (noteForm) attachDraft(noteForm, "attestation:" + noteForm.dataset.id);
 }
 function recordHTML(e) {
   return `<section class="evidence-record"><h3>${esc(e.resource)}</h3>${badge(e.status)}<p>${esc(e.summary)}</p><p>Source: ${esc(e.source)}<br>Collected: ${date(e.collected_at)}</p><pre>${esc(JSON.stringify(e.data, null, 2))}</pre><div class="hash mono">${esc(e.id)}<br>SHA-256 ${esc(e.sha256)}</div></section>`;
@@ -644,6 +686,7 @@ document.addEventListener("submit", async (e) => {
       owner: form.owner.value,
       note: form.note.value,
     });
+    await completeDraft(form);
     await refresh(false);
     $("#detail").close();
     toast(result.message);
@@ -653,7 +696,17 @@ document.addEventListener("submit", async (e) => {
     setButtonBusy(button, false);
   }
 });
-window.addEventListener("hashchange", () => {
+let renderedHash = location.hash;
+window.addEventListener("hashchange", async () => {
+  try {
+    await preserveEditing();
+  } catch (error) {
+    history.replaceState(null, "", location.pathname + renderedHash);
+    toast(error.message, true);
+    return;
+  }
+  if ($("#detail").open) $("#detail").close();
+  renderedHash = location.hash;
   query = "";
   selected = "all";
   provider = "all";
@@ -714,6 +767,7 @@ async function initialize() {
     showSignIn();
     toast(error.message, true);
   } finally {
+    renderedHash = location.hash;
     token = null;
   }
 }
@@ -728,7 +782,7 @@ function decorateWorkspace() {
   $("footer span").textContent =
     "Evidence is retained in your organization workspace.";
   $(".top-meta").innerHTML =
-    `<label class="sr-only" for="workspace-switch">Workspace</label><select id="workspace-switch">${state.workspaces.map((w) => `<option value="${esc(w.id)}" ${w.id === state.workspace_id ? "selected" : ""}>${esc(w.name)} · ${esc(w.role)}</option>`).join("")}</select>${state.role === "admin" ? '<button class="text-button" id="manage-members">Members</button>' : ""}<button class="text-button" id="sign-out">Sign out</button>`;
+    `<label class="sr-only" for="workspace-switch">Workspace</label><select id="workspace-switch">${state.workspaces.map((w) => `<option value="${esc(w.id)}" ${w.id === state.workspace_id ? "selected" : ""}>${esc(w.name)} · ${esc(w.role)}</option>`).join("")}</select>${state.role !== "auditor" ? '<button class="text-button" id="my-drafts">My drafts</button>' : ""}${state.role === "admin" ? '<button class="text-button" id="manage-members">Members</button>' : ""}<button class="text-button" id="sign-out">Sign out</button>`;
   if (view() === "integrations") {
     const callout = $(".bottom-callout p");
     if (callout)
@@ -815,9 +869,10 @@ async function manageMembers() {
     const response = await fetch("/api/members");
     if (!response.ok) throw new Error("Workspace members could not be loaded.");
     const result = await response.json();
+    Object.assign(identityLabels, result.identity_labels || {});
     showDialog(
       "Workspace access",
-      `<p>Membership uses the exact subject from the configured identity provider. Each identity must sign in through that provider.</p><ul>${result.members.map((m) => `<li><code>${esc(m.subject)}</code> · ${esc(m.role)}</li>`).join("")}</ul><form id="member-form"><div class="field"><label for="member-subject">Identity provider subject</label><input id="member-subject" name="subject" required maxlength="255"></div><div class="field"><label for="member-role">Role</label><select id="member-role" name="role"><option value="auditor">Auditor · read and export</option><option value="operator">Operator · manage evidence and governance</option><option value="admin">Administrator · manage integrations and access</option><option value="remove">Remove access</option></select></div><p class="form-error" id="member-error" role="alert"></p><button class="button primary" type="submit">Save membership</button></form>`,
+      `<p>Membership uses the exact subject from the configured identity provider. Each identity must sign in through that provider.</p><ul>${result.members.map((m) => `<li>${identityHTML(m.subject)} · ${esc(m.role)}</li>`).join("")}</ul><form id="member-form"><div class="field"><label for="member-subject">Identity provider subject</label><input id="member-subject" name="subject" required maxlength="255"></div><div class="field"><label for="member-role">Role</label><select id="member-role" name="role"><option value="auditor">Auditor · read and export</option><option value="operator">Operator · manage evidence and governance</option><option value="admin">Administrator · manage integrations and access</option><option value="remove">Remove access</option></select></div><p class="form-error" id="member-error" role="alert"></p><button class="button primary" type="submit">Save membership</button></form><form id="member-label-form" class="section-space"><h3>Friendly identity labels</h3><p>Labels help people recognize owners. Exact subjects still determine permissions and approvals. Duplicate labels do not merge identities.</p><div class="field"><label for="label-subject">Workspace member</label><select id="label-subject" name="subject">${result.members.map((m) => `<option value="${esc(m.subject)}">${esc(identityText(m.subject))}</option>`).join("")}</select></div><div class="field"><label for="identity-label">Display label</label><input id="identity-label" name="label" maxlength="80"><small>Leave blank to remove the label.</small></div><p class="form-error" role="alert"></p><button class="button primary" type="submit">Save label</button></form>`,
       "WORKSPACE ADMINISTRATION",
     );
   } catch (error) {
@@ -835,6 +890,7 @@ document.addEventListener("change", async (event) => {
   loading = false;
   selector.disabled = true;
   try {
+    await preserveEditing();
     await request("/api/workspace", { tenant_id: selector.value });
     if ($("#detail").open) $("#detail").close();
     resetLibraryContext();
@@ -853,8 +909,11 @@ document.addEventListener("change", async (event) => {
 
 document.addEventListener("click", async (event) => {
   if (event.target.closest("#manage-members")) manageMembers();
+  if (event.target.closest("#my-drafts"))
+    manageDrafts().catch((error) => toast(error.message, true));
   if (event.target.closest("#sign-out")) {
     try {
+      await preserveEditing();
       await request("/api/logout", {});
       authenticated = false;
       state = null;
@@ -881,7 +940,14 @@ document.addEventListener("click", async (event) => {
 
 document.addEventListener("submit", async (event) => {
   const form = event.target;
-  if (!["local-login", "integration-form", "member-form"].includes(form.id))
+  if (
+    ![
+      "local-login",
+      "integration-form",
+      "member-form",
+      "member-label-form",
+    ].includes(form.id)
+  )
     return;
   event.preventDefault();
   const button = form.querySelector('[type="submit"]');
@@ -923,6 +989,13 @@ document.addEventListener("submit", async (event) => {
       $("#detail").close();
       await refresh();
       toast("Integration saved. Collect evidence to check access.");
+    } else if (form.id === "member-label-form") {
+      await request("/api/member-label", {
+        subject: form.elements.subject.value,
+        label: form.elements.label.value.trim(),
+      });
+      await manageMembers();
+      toast("Display label saved. Identity and permissions are unchanged.");
     } else {
       await request("/api/members", {
         subject: form.elements.subject.value,
@@ -1056,6 +1129,7 @@ document.addEventListener("submit", async (event) => {
       interval_hours: Number(values.get("interval_hours")),
       freshness_hours: Number(values.get("freshness_hours")),
     });
+    await completeDraft(form);
     delete form.dataset.unsaved;
     await refresh();
     toast("Monitoring policy saved.");
@@ -1248,7 +1322,7 @@ function libraryToolbar(type) {
       : governance
         ? ["all", "pending", "approved", "rejected", "withdrawn", "overdue"]
         : ["all", "pending", "approved", "rejected", "withdrawn", "expired"];
-  return `<section class="library-toolbar ${type}" aria-label="${governance ? "Governance" : "Document"} filters"><div class="field library-search"><label for="${type}-search">Search ${governance ? "records" : "documents"}</label><input type="search" id="${type}-search" data-library="${type}" data-filter-key="query" value="${esc(filters.query)}" placeholder="${governance ? "Title, owner or reference" : "Title, file, owner or control"}" autocomplete="off"></div>${
+  return `<section class="library-toolbar ${type}" aria-label="${governance ? "Governance" : "Document"} filters"><div class="field library-search"><label for="${type}-search">Search ${governance ? "records" : "documents"}</label><input type="search" maxlength="200" id="${type}-search" data-library="${type}" data-filter-key="query" value="${esc(filters.query)}" placeholder="${governance ? "Title, owner or reference" : "Title, file, owner or control"}" autocomplete="off"></div>${
     governance
       ? `<div class="field"><label for="governance-kind">Record type</label><select id="governance-kind" data-library="governance" data-filter-key="kind"><option value="all">All types</option>${Object.entries(
           governanceKinds,
@@ -1259,7 +1333,22 @@ function libraryToolbar(type) {
           )
           .join("")}</select></div>`
       : ""
-  }<div class="field"><label for="${type}-status">Review status</label><select id="${type}-status" data-library="${type}" data-filter-key="status">${statuses.map((value) => `<option value="${value}"${filters.status === value ? " selected" : ""}>${value === "all" ? "All statuses" : value === "overdue" ? "Review overdue" : value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div><button class="button secondary" data-library-clear="${type}">Clear filters</button></section>`;
+  }<div class="field"><label for="${type}-status">Review status</label><select id="${type}-status" data-library="${type}" data-filter-key="status">${statuses.map((value) => `<option value="${value}"${filters.status === value ? " selected" : ""}>${value === "all" ? "All statuses" : value === "overdue" ? "Review overdue" : value[0].toUpperCase() + value.slice(1)}</option>`).join("")}</select></div><div class="field"><label for="${type}-sort">Sort by</label><select id="${type}-sort" data-library-order="${type}" data-page-key="sort">${Object.entries(
+    {
+      newest: "Newest first",
+      oldest: "Oldest first",
+      title: "Title A–Z",
+      owner: "Owner A–Z",
+      review_date: governance ? "Review date" : "Expiry date",
+    },
+  )
+    .map(
+      ([value, label]) =>
+        `<option value="${value}"${libraryPages[type].sort === value ? " selected" : ""}>${label}</option>`,
+    )
+    .join(
+      "",
+    )}</select></div><div class="field"><label for="${type}-size">Per page</label><select id="${type}-size" data-library-order="${type}" data-page-key="page_size">${[10, 25, 50].map((value) => `<option value="${value}"${Number(libraryPages[type].page_size) === value ? " selected" : ""}>${value}</option>`).join("")}</select></div><button class="button secondary" data-library-clear="${type}">Clear filters</button></section>`;
 }
 function libraryFailure(type, error) {
   const root = $(
@@ -1268,30 +1357,66 @@ function libraryFailure(type, error) {
   root.setAttribute("aria-busy", "false");
   root.innerHTML = `<section class="panel load-error" role="alert"><h3>We couldn’t load this library.</h3><p>${esc(error.message)}</p><button class="button secondary" ${type === "governance" ? "data-governance-refresh" : "data-document-refresh"}>Try again</button></section>`;
 }
+function libraryPath(type) {
+  const params = new URLSearchParams({
+    ...libraryPages[type],
+    ...libraryFilters[type],
+  });
+  return (
+    "/api/" + (type === "documents" ? "documents" : "governance") + "?" + params
+  );
+}
+function libraryPagination(type, data) {
+  const p = data.pagination;
+  libraryPages[type].page = p.page;
+  return `<nav class="pagination" aria-label="${type === "documents" ? "Document" : "Governance"} pages"><span role="status">Page ${p.page} of ${p.pages}</span><button class="button secondary" data-page-type="${type}" data-page="${p.page - 1}" ${p.page <= 1 ? "disabled" : ""}>Previous</button><button class="button secondary" data-page-type="${type}" data-page="${p.page + 1}" ${p.page >= p.pages ? "disabled" : ""}>Next</button></nav>`;
+}
 function filterLibrary(type) {
   const source = type === "governance" ? governanceLibrary : documentLibrary;
   if (!source || source.workspace !== state?.workspace_id) return;
   const items = type === "governance" ? source.records : source.documents;
-  const rows = ClearTrailUI[type](items, libraryFilters[type]);
   const target = $(
     type === "governance" ? "#governance-rows" : "#document-rows",
   );
   if (!target) return;
   target.innerHTML =
-    rows
+    items
       .map((item) =>
         type === "governance" ? governanceRow(item) : documentRow(item),
       )
       .join("") ||
-    `<tr><td colspan="5" class="empty-cell"><strong>${items.length ? "No matches for these filters." : "No records available yet."}</strong><p>${items.length ? "Try a different title, owner or review status." : state.role === "auditor" ? "Approved records will appear after your team’s independent review." : "Use the create or upload action above to add your first record."}</p>${items.length ? `<button class="button secondary" data-library-clear="${type}">Clear filters</button>` : ""}</td></tr>`;
+    `<tr><td colspan="5" class="empty-cell"><strong>${source.pagination.available ? "No matches for these filters." : "No records available yet."}</strong><p>${source.pagination.available ? "Try a different title, owner or review status." : state.role === "auditor" ? "Approved records will appear after your team’s independent review." : "Use the create or upload action above to add your first record."}</p></td></tr>`;
+  const p = source.pagination,
+    start = p.total ? (p.page - 1) * p.page_size + 1 : 0;
   $("#" + type + "-count").textContent =
-    `Showing ${rows.length} of ${items.length} ${type === "governance" ? "records" : "documents"}`;
+    `Showing ${start}–${p.total ? start + items.length - 1 : 0} of ${p.total} matches · ${p.available} available`;
+}
+function reloadLibrary(type, reset = false, delay = 0) {
+  clearTimeout(libraryTimers[type]);
+  if (reset) libraryPages[type].page = 1;
+  // Invalidate an older search response before the debounce delay ends.
+  if (type === "documents") documentLoadSequence++;
+  else governanceLoadSequence++;
+  libraryTimers[type] = setTimeout(
+    () => (type === "documents" ? loadDocuments() : loadGovernance()),
+    delay,
+  );
+}
+function identityText(subject) {
+  return identityLabels[subject]
+    ? `${identityLabels[subject]} · ${subject}`
+    : subject;
+}
+function identityHTML(subject) {
+  return identityLabels[subject]
+    ? `<span class="identity-label">${esc(identityLabels[subject])}</span><span class="identity-subject mono">${esc(subject)}</span>`
+    : esc(subject);
 }
 function governanceRow(r) {
-  return `<tr><td><button class="control-title" data-governance-open="${esc(r.record_id)}">${esc(r.title)}</button><span class="control-sub">Version ${r.number}</span></td><td data-label="Type / reference">${esc(governanceKinds[r.kind])}${r.reference ? `<br><span class="mono">${esc(r.reference)}</span>` : ""}</td><td data-label="Owner" class="document-subject">${esc(r.owner)}</td><td data-label="Review">${documentStatus(r.status)}</td><td data-label="Risk / next review">${r.risk_scores ? `<span class="risk-band ${esc(r.risk_scores.residual.band)}">${r.risk_scores.residual.score} · ${esc(r.risk_scores.residual.band)}</span><br>` : ""}<span class="${r.overdue ? "text-warning" : ""}">${r.overdue ? "Review overdue" : "Review due"}</span><br>${esc(r.payload.data.next_review_date || r.payload.data.review_date)}</td></tr>`;
+  return `<tr><td><button class="control-title" data-governance-open="${esc(r.record_id)}">${esc(r.title)}</button><span class="control-sub">Version ${r.number}</span></td><td data-label="Type / reference">${esc(governanceKinds[r.kind])}${r.reference ? `<br><span class="mono">${esc(r.reference)}</span>` : ""}</td><td data-label="Owner" class="document-subject">${identityHTML(r.owner)}</td><td data-label="Review">${documentStatus(r.status)}</td><td data-label="Risk / next review">${r.risk_scores ? `<span class="risk-band ${esc(r.risk_scores.residual.band)}">${r.risk_scores.residual.score} · ${esc(r.risk_scores.residual.band)}</span><br>` : ""}<span class="${r.overdue ? "text-warning" : ""}">${r.overdue ? "Review overdue" : "Review due"}</span><br>${esc(r.payload.data.next_review_date || r.payload.data.review_date)}</td></tr>`;
 }
 function documentRow(item) {
-  return `<tr><td><button class="control-title" data-document-open="${esc(item.id)}">${esc(item.title)}</button><div class="control-sub">${item.control_ids.map(esc).join(" · ")}</div></td><td data-label="Owner" class="document-subject">${esc(item.owner)}</td><td data-label="Latest version">v${item.latest_version.number}<div class="control-sub">${esc(item.latest_version.filename)}</div></td><td data-label="Review">${documentStatus(item.latest_version.status)}</td><td data-label="Expires">${documentDate(item.latest_version.expires_at)}</td></tr>`;
+  return `<tr><td><button class="control-title" data-document-open="${esc(item.id)}">${esc(item.title)}</button><div class="control-sub">${item.control_ids.map(esc).join(" · ")}</div></td><td data-label="Owner" class="document-subject">${identityHTML(item.owner)}</td><td data-label="Latest version">v${item.latest_version.number}<div class="control-sub">${esc(item.latest_version.filename)}</div></td><td data-label="Review">${documentStatus(item.latest_version.status)}</td><td data-label="Expires">${documentDate(item.latest_version.expires_at)}</td></tr>`;
 }
 for (const eventName of ["input", "change"])
   document.addEventListener(eventName, (event) => {
@@ -1302,7 +1427,11 @@ for (const eventName of ["input", "change"])
       Object.hasOwn(libraryFilters[library], filterKey)
     ) {
       libraryFilters[library][filterKey] = event.target.value;
-      filterLibrary(library);
+      reloadLibrary(
+        library,
+        true,
+        eventName === "input" && event.target.type === "search" ? 300 : 0,
+      );
     }
   });
 document.addEventListener("click", (event) => {
@@ -1317,8 +1446,35 @@ document.addEventListener("click", (event) => {
     .forEach(
       (input) => (input.value = libraryFilters[type][input.dataset.filterKey]),
     );
-  filterLibrary(type);
+  reloadLibrary(type, true);
   $("#" + type + "-search")?.focus();
+});
+document.addEventListener("change", (event) => {
+  const type = event.target.dataset.libraryOrder,
+    key = event.target.dataset.pageKey;
+  if (
+    !Object.hasOwn(libraryPages, type) ||
+    !["sort", "page_size"].includes(key)
+  )
+    return;
+  libraryPages[type][key] = event.target.value;
+  reloadLibrary(type, true);
+});
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-page-type]");
+  if (!button) return;
+  const type = button.dataset.pageType;
+  libraryPages[type].page = Number(button.dataset.page);
+  const loader = type === "documents" ? loadDocuments : loadGovernance;
+  button.disabled = true;
+  loader().then(() => {
+    const region = $(
+      type === "documents"
+        ? "#document-library .table-scroll"
+        : "#governance-register .table-scroll",
+    );
+    region?.focus();
+  });
 });
 function governanceView() {
   if (state.mode !== "hosted")
@@ -1332,14 +1488,12 @@ async function loadGovernance() {
   if (!root) return;
   root.setAttribute("aria-busy", "true");
   try {
-    const data = await documentGet("/api/governance", workspace);
+    const data = await documentGet(libraryPath("governance"), workspace);
     if (!$("#governance-register") || sequence !== governanceLoadSequence)
       return;
     governanceLibrary = { ...data, workspace };
-    const decisions = data.records.filter(
-      (r) => r.kind === "applicability",
-    ).length;
-    root.innerHTML = `<div class="register-summary"><span><strong>${data.records.filter((r) => r.status === "pending").length}</strong> awaiting review</span><span><strong>${data.records.filter((r) => r.overdue).length}</strong> reviews overdue</span><span><strong>${decisions} / ${data.reference_count}</strong> applicability entries${state.role === "auditor" ? " approved" : " recorded"}</span></div><div class="table-panel"><div class="table-scroll" tabindex="0" role="region" aria-label="Governance records"><table class="library-table" role="table"><thead><tr><th scope="col">Record</th><th scope="col">Type / reference</th><th scope="col">Owner</th><th scope="col">Review</th><th scope="col">Risk / next review</th></tr></thead><tbody id="governance-rows"></tbody></table></div><div class="table-bottom"><span id="governance-count" role="status" aria-live="polite"></span><span>${data.records.length} / ${data.limits.records} records retained</span></div></div>`;
+    const decisions = data.summary.applicability;
+    root.innerHTML = `<div class="register-summary"><span><strong>${data.summary.pending}</strong> awaiting review</span><span><strong>${data.summary.overdue}</strong> ${data.summary.overdue === 1 ? "review" : "reviews"} overdue</span><span><strong>${decisions} / ${data.reference_count}</strong> applicability entries${state.role === "auditor" ? " approved" : " recorded"}</span></div><div class="table-panel"><div class="table-scroll" tabindex="0" role="region" aria-label="Governance records"><table class="library-table" role="table"><thead><tr><th scope="col">Record</th><th scope="col">Type / reference</th><th scope="col">Owner</th><th scope="col">Review</th><th scope="col">Risk / next review</th></tr></thead><tbody id="governance-rows"></tbody></table></div><div class="table-bottom"><span id="governance-count" role="status" aria-live="polite"></span><span>${data.pagination.available} / ${data.limits.records} records retained</span></div>${libraryPagination("governance", data)}</div>`;
     filterLibrary("governance");
     root.setAttribute("aria-busy", "false");
   } catch (error) {
@@ -1371,13 +1525,13 @@ function governanceField(key, spec, value, options) {
   return `<div class="field${key.includes("date") || key.startsWith("period_") || key.includes("likelihood") || key.includes("impact") ? " compact-field" : ""}"><label for="gov-${key}">${esc(label)}</label>${input}</div>`;
 }
 
-async function governanceForm(item = null) {
+async function governanceForm(item = null, preferredKind = null) {
   const workspace = state.workspace_id;
   const options = await documentGet("/api/governance/options", workspace);
-  const kind = item?.kind || "risk";
+  const kind = item?.kind || preferredKind || "risk";
   showDialog(
     item ? "Create next governance version" : "Create governance record",
-    `<p class="form-intro">Saving creates a pending version. A separate administrator or operator reviews it before it appears in approved exports.</p><form id="governance-form" class="governance"><div class="field"><label for="gov-kind">Record type</label><select id="gov-kind" name="kind"${item ? " disabled" : ""}>${Object.entries(
+    `<p class="form-intro">Saving creates a pending version. A separate administrator or operator reviews it before it appears in approved exports. Each record type has its own private draft; choose the same type to restore it.</p><form id="governance-form" class="governance"><div class="field"><label for="gov-kind">Record type</label><select id="gov-kind" name="kind"${item ? " disabled" : ""}>${Object.entries(
       governanceKinds,
     )
       .map(
@@ -1386,7 +1540,7 @@ async function governanceForm(item = null) {
       )
       .join(
         "",
-      )}</select></div><div class="field"><label for="gov-title">Record title</label><input id="gov-title" name="title" maxlength="160" value="${esc(item?.title || "")}" required></div><div class="field"><label for="gov-owner">Responsible owner</label><select id="gov-owner" name="owner">${options.owners.map((v) => `<option value="${esc(v)}"${v === (item?.owner || state.subject) ? " selected" : ""}>${esc(v)}</option>`).join("")}</select></div><h3 class="form-section-title">Record details</h3><div id="governance-fields" class="form-grid"></div><p class="small">All fields are required. Use a reasoned “none identified” where appropriate. Implemented applicability decisions and completed actions need at least one approved supporting file before approval. Keep credentials out of records.</p><fieldset class="document-controls"><legend>Exact supporting evidence versions (up to 10)</legend>${options.evidence.map((v) => `<label><input type="checkbox" name="evidence" value="${esc(v.id)}"${item?.payload.evidence_version_ids.includes(v.id) ? " checked" : ""}><span>${esc(v.title)} · v${v.number} · ${esc(v.filename)}</span></label>`).join("") || '<p class="small">No approved files available. Upload and independently review evidence first.</p>'}${(
+      )}</select></div><div class="field"><label for="gov-title">Record title</label><input id="gov-title" name="title" maxlength="160" value="${esc(item?.title || "")}" required></div><div class="field"><label for="gov-owner">Responsible owner</label><select id="gov-owner" name="owner">${options.owners.map((v) => `<option value="${esc(v)}"${v === (item?.owner || state.subject) ? " selected" : ""}>${esc(identityText(v))}</option>`).join("")}</select></div><h3 class="form-section-title">Record details</h3><div id="governance-fields" class="form-grid"></div><p class="small">All fields are required. Use a reasoned “none identified” where appropriate. Implemented applicability decisions and completed actions need at least one approved supporting file before approval. Keep credentials out of records.</p><fieldset class="document-controls"><legend>Exact supporting evidence versions (up to 10)</legend>${options.evidence.map((v) => `<label><input type="checkbox" name="evidence" value="${esc(v.id)}"${item?.payload.evidence_version_ids.includes(v.id) ? " checked" : ""}><span>${esc(v.title)} · v${v.number} · ${esc(v.filename)}</span></label>`).join("") || '<p class="small">No approved files available. Upload and independently review evidence first.</p>'}${(
       item?.payload.evidence_version_ids || []
     )
       .filter((id) => !options.evidence.some((v) => v.id === id))
@@ -1410,6 +1564,7 @@ async function governanceForm(item = null) {
       )
       .join("");
     if (item?.kind === "applicability") $("#gov-reference").disabled = true;
+    delete form.syncDraftFields;
     if (selectedKind === "applicability") {
       const syncImplementation = () => {
         const control = $("#gov-implementation"),
@@ -1425,6 +1580,7 @@ async function governanceForm(item = null) {
           )
           .join("");
       };
+      form.syncDraftFields = syncImplementation;
       $("#gov-applicability").addEventListener("change", syncImplementation);
       syncImplementation();
     }
@@ -1448,9 +1604,37 @@ async function governanceForm(item = null) {
         )
         .join("");
   };
-  $("#gov-kind").addEventListener("change", fields);
+  const installDraft = () =>
+    attachDraft(
+      form,
+      "governance:" + (item?.record_id || "new") + "-" + $("#gov-kind").value,
+      $("#gov-kind").value,
+    );
+  $("#gov-kind").addEventListener("change", async () => {
+    const context = draftContexts.get(form),
+      selectedKind = $("#gov-kind").value;
+    try {
+      if (context) {
+        await context.ready;
+        if (
+          !context.pendingRestore ||
+          JSON.stringify(context.fields) !== context.persisted
+        )
+          await flushDraft(form, context);
+      }
+    } catch (error) {
+      $("#gov-kind").value = context.recordKind;
+      toast(error.message, true);
+      return;
+    }
+    $("#gov-kind").value = selectedKind;
+    fields();
+    updateSelectionCounts(form);
+    installDraft();
+  });
   fields();
   updateSelectionCounts(form);
+  installDraft();
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const button = form.querySelector('[type="submit"]');
@@ -1484,6 +1668,7 @@ async function governanceForm(item = null) {
         workspace,
       );
       if (workspace !== state.workspace_id) return;
+      await completeDraft(form);
       $("#detail").close();
       await loadGovernance();
       toast("Pending governance version saved.");
@@ -1640,6 +1825,7 @@ async function documentGet(path, workspace) {
         data.error || "Evidence could not be loaded.",
       ),
     );
+  Object.assign(identityLabels, data.identity_labels || {});
   return data;
 }
 
@@ -1650,10 +1836,10 @@ async function loadDocuments() {
   if (!root) return;
   root.setAttribute("aria-busy", "true");
   try {
-    const data = await documentGet("/api/documents", workspace);
+    const data = await documentGet(libraryPath("documents"), workspace);
     if (!$("#document-library") || sequence !== documentLoadSequence) return;
     documentLibrary = { ...data, workspace };
-    root.innerHTML = `<div class="table-panel"><div class="table-scroll" tabindex="0" role="region" aria-label="Team documents"><table class="library-table" role="table"><thead><tr><th scope="col">Document / controls</th><th scope="col">Owner</th><th scope="col">Latest version</th><th scope="col">Review</th><th scope="col">Expires</th></tr></thead><tbody id="document-rows"></tbody></table></div><div class="table-bottom"><span id="documents-count" role="status" aria-live="polite"></span><span>${data.used_bytes === null ? "Approved history is available in document details." : `${(data.used_bytes / 1048576).toFixed(2)} / 25 MiB retained`}</span></div></div>`;
+    root.innerHTML = `<div class="table-panel"><div class="table-scroll" tabindex="0" role="region" aria-label="Team documents"><table class="library-table" role="table"><thead><tr><th scope="col">Document / controls</th><th scope="col">Owner</th><th scope="col">Latest version</th><th scope="col">Review</th><th scope="col">Expires</th></tr></thead><tbody id="document-rows"></tbody></table></div><div class="table-bottom"><span id="documents-count" role="status" aria-live="polite"></span><span>${data.used_bytes === null ? "Approved history is available in document details." : `${(data.used_bytes / 1048576).toFixed(2)} / 25 MiB retained`}</span></div>${libraryPagination("documents", data)}</div>`;
     filterLibrary("documents");
     root.setAttribute("aria-busy", "false");
   } catch (error) {
@@ -1674,10 +1860,11 @@ async function uploadDocumentDialog(item = null) {
   const controls = documentLibrary.controls;
   showDialog(
     item ? "Upload a replacement version" : "Upload team evidence",
-    `<p>Retain the original bytes and request independent review. Uploading a replacement starts a new pending review.</p><form id="document-upload-form">${item ? `<p><strong>${esc(item.title)}</strong><br>${item.control_ids.map(esc).join(" · ")} · Owner: ${esc(item.owner)}</p>` : `<div class="field"><label for="document-title">Document title</label><input id="document-title" name="title" maxlength="160" required></div><div class="field"><label for="document-owner">Responsible owner</label><select id="document-owner" name="owner">${owners.owners.map((owner) => `<option value="${esc(owner)}"${owner === state.subject ? " selected" : ""}>${esc(owner)}</option>`).join("")}</select></div><fieldset class="document-controls"><legend>Controls supported by this evidence</legend>${controls.map((control) => `<label><input type="checkbox" name="control_ids" value="${esc(control.id)}"> <span>${esc(control.id)} · ${esc(control.title)}</span></label>`).join("")}</fieldset>`}<div class="field"><label for="document-file">Evidence file (text, PDF or modern Office)</label><input id="document-file" name="file" type="file" accept=".txt,.md,.csv,.pdf,.docx,.xlsx,.pptx" required><small>Up to 512 KiB. PDF and modern Office files require fresh scanning; encrypted files, macros and embedded objects are rejected. Do not upload credentials.</small></div><div class="field"><label for="document-expiry">Expires at (optional, your local time)</label><input id="document-expiry" name="expires_at" type="datetime-local"></div><p class="form-error" role="alert"></p><button class="button primary" type="submit">Save pending version</button></form>`,
+    `<p>Retain the original bytes and request independent review. Uploading a replacement starts a new pending review.</p><form id="document-upload-form">${item ? `<p><strong>${esc(item.title)}</strong><br>${item.control_ids.map(esc).join(" · ")} · Owner: ${esc(item.owner)}</p>` : `<div class="field"><label for="document-title">Document title</label><input id="document-title" name="title" maxlength="160" required></div><div class="field"><label for="document-owner">Responsible owner</label><select id="document-owner" name="owner">${owners.owners.map((owner) => `<option value="${esc(owner)}"${owner === state.subject ? " selected" : ""}>${esc(identityText(owner))}</option>`).join("")}</select></div><fieldset class="document-controls"><legend>Controls supported by this evidence</legend>${controls.map((control) => `<label><input type="checkbox" name="control_ids" value="${esc(control.id)}"> <span>${esc(control.id)} · ${esc(control.title)}</span></label>`).join("")}</fieldset>`}<div class="field"><label for="document-file">Evidence file (text, PDF or modern Office)</label><input id="document-file" name="file" type="file" accept=".txt,.md,.csv,.pdf,.docx,.xlsx,.pptx" required><small>Up to 512 KiB. PDF and modern Office files require fresh scanning; encrypted files, macros and embedded objects are rejected. Do not upload credentials.</small></div><div class="field"><label for="document-expiry">Expires at (optional, your local time)</label><input id="document-expiry" name="expires_at" type="datetime-local"></div><p class="form-error" role="alert"></p><button class="button primary" type="submit">Save pending version</button></form>`,
     "TEAM EVIDENCE",
   );
   $("#document-upload-form").evidenceContext = { workspace, item };
+  attachDraft($("#document-upload-form"), "document:" + (item?.id || "new"));
 }
 
 async function documentDetail(id) {
@@ -1696,7 +1883,7 @@ async function documentDetail(id) {
     );
   showDialog(
     item.title,
-    `<p>${item.control_ids.map(esc).join(" · ")}<br>Responsible owner: <strong class="document-subject">${esc(item.owner)}</strong></p>${writer ? '<div class="document-actions"><button class="button secondary" id="document-replace">Upload next version</button><button class="button secondary" id="document-assign">Assign owner</button></div>' : ""}<h3 class="section-space">Version history</h3>${item.versions.map((version) => `<section class="document-version"><div class="section-title"><h3>Version ${version.number} · ${esc(version.filename)}</h3>${documentStatus(version.status)}</div><p class="small">Uploaded ${documentDate(version.created_at)} by <span class="document-subject">${esc(version.uploaded_by)}</span><br>${version.size} bytes · Expires: ${documentDate(version.expires_at)}</p><p class="mono document-hash">SHA-256 ${esc(version.sha256)}</p><p class="small">Scan: ${esc(version.scan?.status || "legacy text; not scanned")}${version.scan?.engine ? " · " + esc(version.scan.engine) + " · definitions " + esc(version.scan.definitions_version) : ""}</p><a class="text-button" href="/api/documents/versions/${encodeURIComponent(version.id)}/download">Download exact version ${icon("download")}</a><ol class="document-reviews">${version.reviews.map((review) => `<li><strong>${esc(review.decision)}</strong> · <span class="document-subject">${esc(review.reviewer)}</span> · ${documentDate(review.created_at)}<p>${esc(review.comment)}</p></li>`).join("") || "<li>Pending independent review.</li>"}</ol>${writer && version.reviews.at(-1)?.decision === "approved" ? `<button class="button secondary" data-document-withdraw="${esc(version.id)}">Withdraw this version’s approval</button>` : ""}</section>`).join("")}${independent ? `<form id="document-review-form" class="section-space"><h3>Review version ${latest.number}</h3><p class="small">Download and inspect the exact version above. Your decision applies to those bytes. The review history is retained.</p><div class="field"><label for="document-decision">Decision</label><select id="document-decision" name="decision"><option value="approved">Approve</option><option value="rejected">Reject</option><option value="withdrawn">Withdraw approval</option></select></div><div class="field"><label for="document-comment">Review rationale</label><textarea id="document-comment" name="comment" maxlength="2000" required></textarea></div><p class="form-error" role="alert"></p><button class="button primary" type="submit">Record review</button></form>` : writer ? '<p class="small section-space">An independent administrator or operator must review this version. Its uploader and owner cannot approve their own evidence.</p>' : ""}`,
+    `<p>${item.control_ids.map(esc).join(" · ")}<br>Responsible owner: <strong class="document-subject">${identityHTML(item.owner)}</strong></p>${writer ? '<div class="document-actions"><button class="button secondary" id="document-replace">Upload next version</button><button class="button secondary" id="document-assign">Assign owner</button></div>' : ""}<h3 class="section-space">Version history</h3>${item.versions.map((version) => `<section class="document-version"><div class="section-title"><h3>Version ${version.number} · ${esc(version.filename)}</h3>${documentStatus(version.status)}</div><p class="small">Uploaded ${documentDate(version.created_at)} by <span class="document-subject">${identityHTML(version.uploaded_by)}</span><br>${version.size} bytes · Expires: ${documentDate(version.expires_at)}</p><p class="mono document-hash">SHA-256 ${esc(version.sha256)}</p><p class="small">Scan: ${esc(version.scan?.status || "legacy text; not scanned")}${version.scan?.engine ? " · " + esc(version.scan.engine) + " · definitions " + esc(version.scan.definitions_version) : ""}</p><a class="text-button" href="/api/documents/versions/${encodeURIComponent(version.id)}/download">Download exact version ${icon("download")}</a><ol class="document-reviews">${version.reviews.map((review) => `<li><strong>${esc(review.decision)}</strong> · <span class="document-subject">${identityHTML(review.reviewer)}</span> · ${documentDate(review.created_at)}<p>${esc(review.comment)}</p></li>`).join("") || "<li>Pending independent review.</li>"}</ol>${writer && version.reviews.at(-1)?.decision === "approved" ? `<button class="button secondary" data-document-withdraw="${esc(version.id)}">Withdraw this version’s approval</button>` : ""}</section>`).join("")}${independent ? `<form id="document-review-form" class="section-space"><h3>Review version ${latest.number}</h3><p class="small">Download and inspect the exact version above. Your decision applies to those bytes. The review history is retained.</p><div class="field"><label for="document-decision">Decision</label><select id="document-decision" name="decision"><option value="approved">Approve</option><option value="rejected">Reject</option><option value="withdrawn">Withdraw approval</option></select></div><div class="field"><label for="document-comment">Review rationale</label><textarea id="document-comment" name="comment" maxlength="2000" required></textarea></div><p class="form-error" role="alert"></p><button class="button primary" type="submit">Record review</button></form>` : writer ? '<p class="small section-space">An independent administrator or operator must review this version. Its uploader and owner cannot approve their own evidence.</p>' : ""}`,
     "IMMUTABLE VERSION HISTORY",
   );
   if (writer) {
@@ -1726,7 +1913,7 @@ async function documentDetail(id) {
         const data = await documentGet("/api/documents/owners", workspace);
         showDialog(
           "Assign responsible owner",
-          `<form id="document-assign-form"><p>${esc(item.title)}</p><div class="field"><label for="document-new-owner">Owner</label><select id="document-new-owner" name="owner">${data.owners.map((owner) => `<option value="${esc(owner)}"${owner === item.owner ? " selected" : ""}>${esc(owner)}</option>`).join("")}</select></div><p class="small">Ownership changes retain all version and review history.</p><p class="form-error" role="alert"></p><button class="button primary" type="submit">Assign owner</button></form>`,
+          `<form id="document-assign-form"><p>${esc(item.title)}</p><div class="field"><label for="document-new-owner">Owner</label><select id="document-new-owner" name="owner">${data.owners.map((owner) => `<option value="${esc(owner)}"${owner === item.owner ? " selected" : ""}>${esc(identityText(owner))}</option>`).join("")}</select></div><p class="small">Ownership changes retain all version and review history.</p><p class="form-error" role="alert"></p><button class="button primary" type="submit">Assign owner</button></form>`,
           "EVIDENCE RESPONSIBILITY",
         );
         $("#document-assign-form").evidenceContext = { workspace, item };
@@ -1823,6 +2010,7 @@ document.addEventListener("submit", async (event) => {
       );
     }
     if (workspace !== state?.workspace_id) return;
+    await completeDraft(form);
     $("#detail").close();
     await loadDocuments();
     toast("Evidence history saved.");
@@ -1832,6 +2020,405 @@ document.addEventListener("submit", async (event) => {
     setButtonBusy(button, false);
   }
 });
+
+// Private drafts live in the encrypted server store, never localStorage.
+const draftContexts = new WeakMap();
+const draftAllowed = {
+  governance: new Set([
+    "kind",
+    "title",
+    "owner",
+    ...Object.values(governanceFields).flatMap((fields) => Object.keys(fields)),
+    "evidence",
+    "related",
+  ]),
+  document: new Set(["title", "owner", "control_ids", "expires_at"]),
+  schedule: new Set(["enabled", "interval_hours", "freshness_hours"]),
+  attestation: new Set(["owner", "note"]),
+};
+function draftSnapshot(form, context) {
+  return ClearTrailUI.draftFields(
+    [...form.elements],
+    draftAllowed[context.kind],
+    context.kind === "governance" ? context.recordKind : null,
+  );
+}
+function draftStatus(context, message, error = false) {
+  if (!context.form.isConnected || draftContexts.get(context.form) !== context)
+    return;
+  const line = context.panel.querySelector("[role=status]");
+  line.textContent = message;
+  line.classList.toggle("form-error", error);
+}
+function currentDraftContext(context) {
+  return (
+    authenticated &&
+    state?.mode === "hosted" &&
+    state.workspace_id === context.workspace &&
+    state.subject === context.subject &&
+    state.role === context.role
+  );
+}
+async function draftWrite(context, fields) {
+  if (!currentDraftContext(context))
+    throw new Error("Workspace or access changed. The draft was not sent.");
+  const response = await fetch("/api/drafts", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-ClearTrail-Token": state.csrf,
+      "X-ClearTrail-Workspace": context.workspace,
+    },
+    body: JSON.stringify({
+      key: context.key,
+      fields,
+      expected_revision: context.revision,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok)
+    throw new Error(
+      response.status === 409
+        ? "The workspace or saved draft changed. The saved copy was not overwritten. Reopen the correct workspace and form before saving again."
+        : ClearTrailUI.errorMessage(response.status, data.error),
+    );
+  if (!currentDraftContext(context))
+    throw new Error("Workspace changed while the draft was saving.");
+  context.revision = data.draft?.revision || null;
+  return data;
+}
+async function flushDraft(
+  form,
+  context = draftContexts.get(form),
+  force = false,
+) {
+  if (!context) return;
+  clearTimeout(context.timer);
+  const task = context.enqueue(async () => {
+    await context.ready;
+    if (context.pendingRestore)
+      throw new Error(
+        "Restore or discard the saved draft before leaving this form.",
+      );
+    const fields = structuredClone(context.fields),
+      encoded = JSON.stringify(fields);
+    if (encoded === context.persisted && (!force || context.revision)) return;
+    draftStatus(context, "Saving private draft…");
+    await draftWrite(context, fields);
+    context.persisted = encoded;
+    if (context.panel.isConnected)
+      context.panel.querySelector("[data-draft-discard]").hidden = false;
+    draftStatus(
+      context,
+      "Private draft saved for 7 days. It is visible only to you in this workspace.",
+    );
+  });
+  context.saving = task;
+  try {
+    await task;
+  } catch (error) {
+    draftStatus(context, error.message, true);
+    throw error;
+  } finally {
+    if (context.saving === task) context.saving = null;
+  }
+}
+async function clearDraft(form) {
+  const context = draftContexts.get(form);
+  if (!context) return;
+  clearTimeout(context.timer);
+  await context.ready;
+  if (context.saving) await context.saving;
+  await draftWrite(context, null);
+  context.persisted = JSON.stringify(context.fields);
+  context.pendingRestore = false;
+}
+async function completeDraft(form) {
+  try {
+    await clearDraft(form);
+  } catch (error) {
+    toast(
+      "Record saved. Its private draft could not be cleared; reopen and discard it before reuse.",
+      true,
+    );
+  }
+}
+function restoreDraftFields(form, fields) {
+  let unavailable = 0;
+  for (const input of form.elements) {
+    if (
+      !Object.hasOwn(fields, input.name) ||
+      ["file", "password"].includes(input.type)
+    )
+      continue;
+    const value = fields[input.name];
+    if (input.type === "checkbox")
+      input.checked = Array.isArray(value)
+        ? value.includes(input.value)
+        : value === "true";
+    else if (input.tagName === "SELECT") {
+      if ([...input.options].some((option) => option.value === value))
+        input.value = value;
+      else unavailable++;
+    } else input.value = value;
+    if (input.name === "applicability") form.syncDraftFields?.();
+  }
+  if (form.id === "schedule-form")
+    form.elements.freshness_hours.min = form.elements.interval_hours.value;
+  for (const name of ["evidence", "related", "control_ids"]) {
+    if (Array.isArray(fields[name]))
+      unavailable += fields[name].filter(
+        (value) =>
+          ![...form.elements].some(
+            (input) => input.name === name && input.value === value,
+          ),
+      ).length;
+  }
+  updateSelectionCounts(form);
+  return unavailable;
+}
+function attachDraft(form, key, recordKind = null) {
+  if (!form || state?.mode !== "hosted" || state.role === "auditor") return;
+  form.querySelector(".private-draft")?.remove();
+  const kind = key.split(":")[0],
+    panel = document.createElement("section");
+  panel.className = "private-draft";
+  panel.setAttribute("aria-label", "Private draft recovery");
+  panel.innerHTML =
+    '<p role="status">Checking for a private draft…</p><p class="small">Encrypted recovery for 7 days, only for your identity and workspace. Upload files and credentials are never retained. Evidence links are rechecked before publication. Saving a draft does not publish evidence.</p><div class="document-actions"><button type="button" class="button secondary" data-draft-restore hidden>Restore draft</button><button type="button" class="button secondary" data-draft-save>Save draft now</button><button type="button" class="button secondary" data-draft-discard hidden>Discard saved draft</button></div>';
+  form.prepend(panel);
+  const context = {
+    form,
+    panel,
+    key,
+    kind,
+    recordKind,
+    workspace: state.workspace_id,
+    subject: state.subject,
+    role: state.role,
+    revision: null,
+    persisted: null,
+    pendingRestore: false,
+    saving: null,
+    enqueue: ClearTrailUI.serialQueue(),
+  };
+  context.fields = draftSnapshot(form, context);
+  context.persisted = JSON.stringify(context.fields);
+  draftContexts.set(form, context);
+  context.ready = (async () => {
+    const data = await documentGet(
+      "/api/drafts?key=" + encodeURIComponent(key),
+      context.workspace,
+    );
+    if (!currentDraftContext(context)) return;
+    context.revision = data.draft?.revision || null;
+    if (data.draft) {
+      context.pendingRestore = true;
+      context.savedFields = data.draft.fields;
+      draftStatus(
+        context,
+        "A private draft is available from " +
+          documentDate(data.draft.updated_at) +
+          ". Review it before publishing; previously selected files must be chosen again.",
+      );
+      panel.querySelector("[data-draft-restore]").hidden = false;
+      panel.querySelector("[data-draft-discard]").hidden = false;
+    } else
+      draftStatus(
+        context,
+        "Private recovery is ready. Supported fields save automatically while you edit.",
+      );
+  })().catch((error) => {
+    draftStatus(
+      context,
+      "Private recovery unavailable: " + error.message,
+      true,
+    );
+    throw error;
+  });
+  // The UI reports load failures; retain a rejection for explicit flush/save.
+  context.ready.catch(() => {});
+  panel
+    .querySelector("[data-draft-save]")
+    .addEventListener("click", () =>
+      flushDraft(form, context, true).catch(() => {}),
+    );
+  panel.querySelector("[data-draft-restore]").addEventListener("click", () => {
+    if (
+      JSON.stringify(context.fields) !== context.persisted &&
+      !context.restoreConfirmed
+    ) {
+      context.restoreConfirmed = true;
+      panel.querySelector("[data-draft-restore]").textContent =
+        "Replace current edits";
+      draftStatus(
+        context,
+        "Restoring replaces the text currently in this form. Select Replace current edits to confirm.",
+        true,
+      );
+      return;
+    }
+    const unavailable = restoreDraftFields(form, context.savedFields);
+    context.pendingRestore = false;
+    context.fields = draftSnapshot(form, context);
+    context.persisted = JSON.stringify(context.fields);
+    panel.querySelector("[data-draft-restore]").hidden = true;
+    form.dataset.unsaved = "true";
+    if (form.closest("#detail")) dialogDirty = true;
+    draftStatus(
+      context,
+      "Draft restored. Review all fields before saving." +
+        (unavailable
+          ? ` ${unavailable} selections are no longer available; choose current evidence/owners.`
+          : ""),
+    );
+    form.querySelector("input:not([type=hidden]),textarea,select")?.focus();
+  });
+  panel
+    .querySelector("[data-draft-discard]")
+    .addEventListener("click", async () => {
+      try {
+        await clearDraft(form);
+        panel.querySelector("[data-draft-restore]").hidden = true;
+        panel.querySelector("[data-draft-discard]").hidden = true;
+        draftStatus(
+          context,
+          "Saved draft discarded. Current form values remain.",
+        );
+      } catch (error) {
+        draftStatus(context, error.message, true);
+      }
+    });
+}
+for (const eventName of ["input", "change"])
+  document.addEventListener(eventName, (event) => {
+    const form = event.target.closest("form"),
+      context = draftContexts.get(form);
+    if (!context || !draftAllowed[context.kind].has(event.target.name)) return;
+    context.fields = draftSnapshot(form, context);
+    clearTimeout(context.timer);
+    context.timer = setTimeout(
+      () => flushDraft(form, context).catch(() => {}),
+      1000,
+    );
+  });
+function draftDescription(key) {
+  const [kind, id] = key.split(":");
+  if (kind === "governance") {
+    const type = Object.keys(governanceKinds).find((k) => id.endsWith("-" + k));
+    return (
+      (id.startsWith("new-") ? "New " : "") +
+      (governanceKinds[type] || "governance record")
+    );
+  }
+  return (
+    {
+      document: id === "new" ? "New team document" : "Document metadata",
+      schedule: "Monitoring policy",
+      attestation: "Team note · " + id,
+    }[kind] || "Private form draft"
+  );
+}
+function draftTitle(draft) {
+  return draft.title && draft.title !== draft.key
+    ? draft.title
+    : draftDescription(draft.key);
+}
+async function manageDrafts() {
+  const data = await documentGet("/api/draft-index", state.workspace_id);
+  showDialog(
+    "Your private drafts",
+    `<p>Only you can recover these copies in this workspace. They expire after seven days and are excluded from approved exports. Resume opens the relevant form; choose Restore draft to review its contents.</p><p>${data.drafts.length} / ${data.limit} private drafts</p><ul class="draft-list">${data.drafts.map((d) => `<li><div><strong>${esc(draftTitle(d))}</strong><p class="small">${esc(draftDescription(d.key))}<br>Saved ${documentDate(d.updated_at)} · Expires ${documentDate(d.expires_at)}</p></div><div class="document-actions"><button class="button secondary" aria-label="Resume ${esc(draftTitle(d))}" data-resume-draft="${esc(d.key)}">Resume</button><button class="button secondary" aria-label="Discard draft ${esc(draftTitle(d))}" data-delete-draft="${esc(d.key)}" data-revision="${esc(d.revision)}">Discard draft</button></div></li>`).join("") || "<li>No private drafts. Supported forms save recovery copies while you edit.</li>"}</ul>`,
+    "PRIVATE RECOVERY",
+  );
+}
+async function activateView(target) {
+  $("#detail").close();
+  if (view() === target) {
+    render();
+    return;
+  }
+  await new Promise((resolve) => {
+    window.addEventListener("hashchange", resolve, { once: true });
+    location.hash = target;
+  });
+}
+async function resumeDraft(key) {
+  const [kind, id] = key.split(":");
+  if (kind === "governance") {
+    const match =
+      /^(new|[a-f0-9-]{36})-(risk|applicability|internal_audit|management_review|corrective_action)$/.exec(
+        id,
+      );
+    if (!match)
+      throw new Error("Open the original record to recover this draft.");
+    await activateView("governance");
+    const item =
+      match[1] === "new"
+        ? null
+        : (
+            await documentGet(
+              "/api/governance/" + encodeURIComponent(match[1]),
+              state.workspace_id,
+            )
+          ).versions[0];
+    await governanceForm(item, match[2]);
+  } else if (kind === "document") {
+    await activateView("documents");
+    await loadDocuments();
+    const item =
+      id === "new"
+        ? null
+        : await documentGet(
+            "/api/documents/" + encodeURIComponent(id),
+            state.workspace_id,
+          );
+    await uploadDocumentDialog(item);
+  } else if (kind === "schedule") {
+    await activateView("monitoring");
+  } else if (kind === "attestation") {
+    if (!state.run?.checks.some((c) => c.id === id && c.provider === "manual"))
+      throw new Error(
+        "Collect a current snapshot before reopening this team note.",
+      );
+    await activateView("controls");
+    controlDetail(id);
+  }
+}
+document.addEventListener("click", async (event) => {
+  const resume = event.target.closest("[data-resume-draft]"),
+    discard = event.target.closest("[data-delete-draft]");
+  try {
+    if (resume) await resumeDraft(resume.dataset.resumeDraft);
+    if (discard) {
+      await request("/api/drafts", {
+        key: discard.dataset.deleteDraft,
+        fields: null,
+        expected_revision: discard.dataset.revision,
+      });
+      await manageDrafts();
+      announce("Private draft discarded.");
+    }
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+function draftDurable(form) {
+  const context = draftContexts.get(form);
+  return (
+    context &&
+    !context.pendingRestore &&
+    !context.saving &&
+    context.persisted === JSON.stringify(context.fields)
+  );
+}
+async function preserveEditing() {
+  const form = $("#detail[open] form") || $("#content form[data-unsaved]");
+  if (!form || (form.closest("#detail") && !dialogDirty)) return;
+  if (draftContexts.has(form)) await flushDraft(form);
+  else if (dialogDirty || form.dataset.unsaved)
+    throw new Error("Finish or close the current form before changing pages.");
+}
 
 initialize();
 setInterval(() => {

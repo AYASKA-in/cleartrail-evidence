@@ -25,8 +25,9 @@ from .monitoring import (DEFAULT_INTERVAL_HOURS, DEFAULT_FRESHNESS_HOURS, SCHEDU
                          validate_schedule, evidence_health, monitoring_projection)
 from .document_repository import DocumentRepository
 from .governance_repository import GovernanceRepository
+from .workspace_ux import WorkspaceUXRepository
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 ROLES = {"admin", "operator", "auditor"}
 meta = MetaData()
 schema = Table("ct_schema", meta, Column("version", Integer, primary_key=True))
@@ -129,7 +130,14 @@ governance_reviews = tenant_table("governance_reviews", Column("id", String(36),
     constraints=(ForeignKeyConstraint(["tenant_id", "version_id"], ["ct_governance_versions.tenant_id", "ct_governance_versions.id"]),
                  UniqueConstraint("tenant_id", "version_id", "sequence"),
                  CheckConstraint("decision IN ('approved','rejected','withdrawn') AND sequence BETWEEN 1 AND 20")))
-SCOPED = (credentials, notes, revisions, runs, jobs, audit, schedules, occurrences, notifications, monitoring, job_heads,
+member_profiles = tenant_table("member_profiles", Column("subject", String(255), primary_key=True),
+    Column("issuer", String(512), nullable=False), Column("label", String(80), nullable=False))
+drafts = tenant_table("drafts", Column("subject", String(255), primary_key=True),
+    Column("key", String(90), primary_key=True), Column("issuer", String(512), nullable=False),
+    Column("role", String(16), nullable=False), Column("revision", String(32), nullable=False),
+    Column("updated_at", BigInteger, nullable=False), Column("expires_at", BigInteger, nullable=False),
+    Column("envelope", Text, nullable=False))
+SCOPED = (member_profiles, drafts, credentials, notes, revisions, runs, jobs, audit, schedules, occurrences, notifications, monitoring, job_heads,
           documents, document_versions, document_reviews, governance_records, governance_versions, governance_reviews)
 
 
@@ -143,7 +151,7 @@ def tenant_id(value):
     return value
 
 
-class Repository(GovernanceRepository, DocumentRepository):
+class Repository(WorkspaceUXRepository, GovernanceRepository, DocumentRepository):
     def __init__(self, settings):
         self.settings = settings
         options = {"pool_pre_ping": True}
@@ -168,7 +176,7 @@ class Repository(GovernanceRepository, DocumentRepository):
             if self.engine.dialect.name == "postgresql":
                 db.execute(sql("SELECT pg_advisory_xact_lock(648236173)"))
             versions = list(db.execute(select(schema.c.version)).scalars()) if inspect(db).has_table(schema.name) else []
-            if versions not in ([], [1], [2], [3], [4], [SCHEMA_VERSION]):
+            if versions not in ([], [1], [2], [3], [4], [5], [SCHEMA_VERSION]):
                 raise ValueError("Unsupported hosted schema version.")
             # Additive migrations preserve existing evidence, jobs and audit rows.
             meta.create_all(db)
@@ -197,7 +205,7 @@ class Repository(GovernanceRepository, DocumentRepository):
                     latest_job = db.execute(select(jobs.c.id).where(jobs.c.tenant_id == tenant).order_by(jobs.c.status.in_(["queued", "running"]).desc(), jobs.c.created_at.desc(), jobs.c.finished_at.desc(), jobs.c.id.desc()).limit(1)).scalar()
                     if latest_job:
                         db.execute(insert(job_heads).values(tenant_id=tenant, job_id=latest_job))
-            if versions in ([1], [2], [3], [4]):
+            if versions in ([1], [2], [3], [4], [5]):
                 db.execute(update(schema).values(version=SCHEMA_VERSION))
 
     def ready(self):
@@ -208,7 +216,7 @@ class Repository(GovernanceRepository, DocumentRepository):
                 role = db.execute(sql("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname=current_user")).one()
                 if role[0] or role[1]:
                     raise ValueError("Hosted database role must not bypass row-level security.")
-                count = db.execute(sql("SELECT count(*) FROM pg_class WHERE relnamespace=current_schema()::regnamespace AND relname IN ('ct_credentials','ct_notes','ct_revisions','ct_runs','ct_jobs','ct_audit','ct_schedules','ct_schedule_occurrences','ct_notifications','ct_monitoring','ct_job_heads','ct_documents','ct_document_versions','ct_document_reviews','ct_governance_records','ct_governance_versions','ct_governance_reviews') AND relrowsecurity AND relforcerowsecurity")).scalar_one()
+                count = db.execute(sql("SELECT count(*) FROM pg_class WHERE relnamespace=current_schema()::regnamespace AND relname IN ('ct_credentials','ct_notes','ct_revisions','ct_runs','ct_jobs','ct_audit','ct_schedules','ct_schedule_occurrences','ct_notifications','ct_monitoring','ct_job_heads','ct_documents','ct_document_versions','ct_document_reviews','ct_governance_records','ct_governance_versions','ct_governance_reviews','ct_drafts','ct_member_profiles') AND relrowsecurity AND relforcerowsecurity")).scalar_one()
                 if count != len(SCOPED):
                     raise ValueError("Tenant row-level security is not installed.")
         return True
@@ -303,6 +311,8 @@ class Repository(GovernanceRepository, DocumentRepository):
                 if db.execute(select(func.count()).select_from(members).where(members.c.tenant_id == tenant)).scalar_one() >= 100:
                     raise ValueError("Workspace member quota reached.")
                 db.execute(insert(members).values(tenant_id=tenant, issuer=issuer, subject=subject, role=role))
+            if existing and role != existing["role"]:
+                db.execute(delete(drafts).where(drafts.c.tenant_id == tenant, drafts.c.subject == subject))
             # Existing sessions recheck membership and role on every request.
             self._audit(db, tenant, actor, "membership.changed", {"subject": subject, "role": role})
 
@@ -387,6 +397,7 @@ class Repository(GovernanceRepository, DocumentRepository):
                 db.execute(update(credentials).where(credentials.c.tenant_id == tenant, credentials.c.provider == row["provider"]).values(envelope=envelope))
             self.rotate_document_keys(db, tenant)
             self.rotate_governance_keys(db, tenant)
+            self.rotate_workspace_keys(db, tenant)
             self._audit(db, tenant, "operator-cli", "vault.rotated", {"count": len(rows), "documents_rotated": True, "governance_rotated": True})
             return len(rows)
 

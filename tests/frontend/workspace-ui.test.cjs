@@ -115,3 +115,69 @@ test("errors explain permission, conflict, size and retry recovery without leaki
   assert.match(ui.errorMessage(429), /Wait/);
   assert.equal(ui.errorMessage(422, "File rejected."), "File rejected.");
 });
+
+test("private recovery excludes password and upload inputs even if a field name is permitted", () => {
+  const input = [
+    { name: "title", type: "text", value: "Draft" },
+    { name: "token", type: "password", value: "do-not-retain" },
+    { name: "file", type: "file", value: "private-path" },
+    { name: "csrf", type: "hidden", value: "secret" },
+  ];
+  assert.deepEqual(
+    ui.draftFields(input, new Set(["title", "token", "file"]), null),
+    { title: "Draft" },
+  );
+});
+test("draft selection lists and disabled toggles round-trip without becoming approvals", () => {
+  const input = [
+    {
+      name: "evidence",
+      type: "checkbox",
+      checked: true,
+      value: "approved-version",
+    },
+    { name: "evidence", type: "checkbox", checked: false, value: "other" },
+    { name: "enabled", type: "checkbox", checked: false },
+    { name: "role", type: "select-one", value: "admin" },
+  ];
+  assert.deepEqual(
+    ui.draftFields(input, new Set(["evidence", "enabled"]), null),
+    { evidence: ["approved-version"], enabled: "false" },
+  );
+});
+test("changing the type selector cannot save old fields under the newly selected type", () => {
+  assert.deepEqual(
+    ui.draftFields(
+      [
+        { name: "kind", type: "select-one", value: "internal_audit" },
+        { name: "scope", type: "textarea", value: "Old risk scope" },
+      ],
+      new Set(["kind", "scope"]),
+      "risk",
+    ),
+    { kind: "risk", scope: "Old risk scope" },
+  );
+});
+
+test("autosave and manual recovery actions serialize and a failed action does not poison the queue", async () => {
+  const enqueue = ui.serialQueue(),
+    calls = [];
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  const first = enqueue(async () => {
+    calls.push("start first");
+    await gate;
+    calls.push("finish first");
+    throw new Error("synthetic failure");
+  });
+  const observed = first.catch(() => "failed");
+  const second = enqueue(async () => {
+    calls.push("second");
+    return "saved";
+  });
+  await Promise.resolve();
+  release();
+  assert.equal(await observed, "failed");
+  assert.equal(await second, "saved");
+  assert.deepEqual(calls, ["start first", "finish first", "second"]);
+});
